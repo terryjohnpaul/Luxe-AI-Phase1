@@ -1,0 +1,556 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// AUTH (NextAuth v5)
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(VIEWER)
+  accounts      Account[]
+  sessions      Session[]
+  organization  Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum UserRole {
+  ADMIN
+  MARKETING_HEAD
+  PERFORMANCE_MARKETER
+  CONTENT_CREATOR
+  BUYING_HEAD
+  CATEGORY_EXPERT
+  WHATSAPP_STYLIST
+  VIEWER
+}
+
+// ============================================================
+// ORGANIZATION & AD ACCOUNTS
+// ============================================================
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  domain      String?
+  users       User[]
+  adAccounts  AdAccount[]
+  campaigns   Campaign[]
+  audiences   Audience[]
+  signals     Signal[]
+  brandAssets BrandSandboxAsset[]
+  creativeVariants CreativeVariant[]
+  optimizationCycles OptimizationCycle[]
+  customerProfiles CustomerProfile[]
+  brandScores BrandScore[]
+  seasonNotes SeasonNote[]
+  productFeed ProductFeedItem[]
+  emailFlows  EmailFlow[]
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AdAccount {
+  id              String      @id @default(cuid())
+  platform        AdPlatform
+  accountId       String      // Meta ad account ID or Google customer ID
+  name            String
+  accessToken     String?     @db.Text  // Encrypted
+  refreshToken    String?     @db.Text  // Encrypted
+  developerToken  String?     @db.Text  // Google only
+  pixelId         String?     // Meta pixel ID
+  isActive        Boolean     @default(true)
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  campaigns       Campaign[]
+  metrics         CampaignMetric[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  @@unique([platform, accountId])
+}
+
+enum AdPlatform {
+  META
+  GOOGLE
+}
+
+// ============================================================
+// CAMPAIGNS & METRICS (Unified View)
+// ============================================================
+
+model Campaign {
+  id              String      @id @default(cuid())
+  externalId      String      // Meta campaign ID or Google campaign resource name
+  platform        AdPlatform
+  name            String
+  status          CampaignStatus @default(PAUSED)
+  campaignType    String?     // ASC, PMAX, BRAND_SEARCH, DEMAND_GEN, RETARGET, etc.
+  dailyBudget     Float?      // In local currency (INR)
+  lifetimeBudget  Float?
+  objective       String?     // OUTCOME_SALES, PERFORMANCE_MAX, etc.
+  targetRoas      Float?
+  archetype       CustomerArchetype? // Which archetype this targets
+  brandFocus      String?     // Brand name if brand-specific
+  funnelStage     FunnelStage? // AWARENESS, CONSIDERATION, CONVERSION, RETENTION
+  isAutomated     Boolean     @default(false)  // Managed by optimization engine
+  adAccount       AdAccount   @relation(fields: [adAccountId], references: [id])
+  adAccountId     String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  metrics         CampaignMetric[]
+  creativeVariants CreativeVariant[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  @@unique([platform, externalId])
+}
+
+model CampaignMetric {
+  id              String      @id @default(cuid())
+  campaign        Campaign    @relation(fields: [campaignId], references: [id])
+  campaignId      String
+  adAccount       AdAccount   @relation(fields: [adAccountId], references: [id])
+  adAccountId     String
+  date            DateTime    @db.Date
+  impressions     Int         @default(0)
+  clicks          Int         @default(0)
+  spend           Float       @default(0)    // INR
+  conversions     Int         @default(0)
+  conversionValue Float       @default(0)    // INR
+  ctr             Float?
+  cpc             Float?
+  cpa             Float?
+  roas            Float?
+  netRoas         Float?      // After returns — UNIQUE to this platform
+  returnRate      Float?      // % of conversions returned
+  frequency       Float?
+  reach           Int?
+  videoViews      Int?
+  addToCart       Int?
+  purchases       Int?
+  platform        AdPlatform
+  breakdown       Json?       // Age, gender, placement, device breakdown
+  createdAt       DateTime    @default(now())
+  @@index([campaignId, date])
+  @@index([adAccountId, date])
+  @@unique([campaignId, date])
+}
+
+enum CampaignStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+  ARCHIVED
+  IN_REVIEW
+}
+
+enum FunnelStage {
+  AWARENESS
+  CONSIDERATION
+  CONVERSION
+  RETENTION
+}
+
+// ============================================================
+// OPTIMIZATION ENGINE
+// ============================================================
+
+model OptimizationCycle {
+  id              String      @id @default(cuid())
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  startedAt       DateTime    @default(now())
+  completedAt     DateTime?
+  status          JobStatus   @default(RUNNING)
+  metricsSnapshot Json?       // Snapshot of all metrics at cycle start
+  signalsSnapshot Json?       // Active signals at cycle time
+  decisions       OptimizationDecision[]
+  summary         Json?       // Cycle summary: total changes, impact
+  error           String?     @db.Text
+}
+
+model OptimizationDecision {
+  id              String      @id @default(cuid())
+  cycle           OptimizationCycle @relation(fields: [cycleId], references: [id])
+  cycleId         String
+  campaignId      String?
+  decisionType    DecisionType
+  description     String      @db.Text
+  reasoning       String      @db.Text   // Why the AI made this decision
+  previousValue   Json?       // Before change
+  newValue        Json?       // After change
+  autoApproved    Boolean     @default(false)
+  approvedBy      String?     // User ID who approved (if manual)
+  approvedAt      DateTime?
+  status          DecisionStatus @default(PENDING)
+  executedAt      DateTime?
+  impact          Json?       // Measured impact after execution
+  createdAt       DateTime    @default(now())
+}
+
+enum DecisionType {
+  BUDGET_INCREASE
+  BUDGET_DECREASE
+  CAMPAIGN_PAUSE
+  CAMPAIGN_RESUME
+  CAMPAIGN_CREATE
+  DISCOUNT_REMOVE
+  DISCOUNT_ADD
+  CREATIVE_REFRESH
+  AUDIENCE_SHIFT
+  BID_ADJUST
+  SIGNAL_RESPONSE
+}
+
+enum DecisionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXECUTED
+  FAILED
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// ============================================================
+// CUSTOMER INTELLIGENCE
+// ============================================================
+
+model CustomerProfile {
+  id              String      @id @default(cuid())
+  externalId      String?     // CRM customer ID
+  email           String?
+  phone           String?
+  archetype       CustomerArchetype?
+  archetypeScore  Float?      // Confidence 0-1
+  predictedClv    Float?      // Predicted lifetime value (INR)
+  actualClv       Float?      // Actual lifetime value (INR)
+  totalOrders     Int         @default(0)
+  totalSpend      Float       @default(0)
+  avgOrderValue   Float?
+  returnRate      Float?      // Personal return rate
+  discountUsage   Float?      // Average discount % used
+  avgTimeOnSite   Float?      // Minutes
+  topBrands       Json?       // Array of brand affinities
+  topCategories   Json?       // Array of category preferences
+  city            String?
+  tier            String?     // TIER_1, TIER_1B, TIER_2, etc.
+  firstPurchaseAt DateTime?
+  lastPurchaseAt  DateTime?
+  churnRisk       Float?      // 0-1 probability of churning
+  isVip           Boolean     @default(false)
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  @@index([organizationId, archetype])
+  @@index([organizationId, predictedClv(sort: Desc)])
+}
+
+enum CustomerArchetype {
+  FASHION_LOYALIST
+  URBAN_ACHIEVER
+  OCCASIONAL_SPLURGER
+  ASPIRANT
+  UNCLASSIFIED
+}
+
+model Audience {
+  id              String      @id @default(cuid())
+  name            String
+  description     String?     @db.Text
+  archetype       CustomerArchetype?
+  filters         Json        // Query filters for audience definition
+  memberCount     Int         @default(0)
+  metaAudienceId  String?     // Synced Meta Custom Audience ID
+  googleListId    String?     // Synced Google Customer Match list
+  lastSyncedAt    DateTime?
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ============================================================
+// SIGNALS
+// ============================================================
+
+model Signal {
+  id              String      @id @default(cuid())
+  type            SignalType
+  source          String      // weatherapi, google_trends, brandwatch, inventory, etc.
+  severity        SignalSeverity @default(MEDIUM)
+  title           String
+  description     String      @db.Text
+  data            Json        // Signal-specific payload
+  city            String?
+  brand           String?
+  isActive        Boolean     @default(true)
+  autoActionTaken String?     // What automated action was taken
+  resolvedAt      DateTime?
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  createdAt       DateTime    @default(now())
+  @@index([organizationId, type, isActive])
+  @@index([createdAt])
+}
+
+enum SignalType {
+  WEATHER
+  SEARCH_TREND
+  SOCIAL_BUZZ
+  CELEBRITY_MENTION
+  INVENTORY_LOW
+  INVENTORY_FAST_SELLER
+  INVENTORY_SLOW_MOVER
+  COMPETITOR_PRICE
+  COMPETITOR_OOS
+  CALENDAR_EVENT
+  PURCHASE_ANOMALY
+  CREATIVE_FATIGUE
+  ROAS_SPIKE
+  ROAS_DROP
+}
+
+enum SignalSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model SignalRule {
+  id              String      @id @default(cuid())
+  name            String
+  signalType      SignalType
+  conditions      Json        // e.g., { "temp_below": 15, "city": "Delhi" }
+  actions         Json        // e.g., { "activate_campaign": "jacket-delhi", "boost_budget": 1.5 }
+  isAutoApproved  Boolean     @default(true)
+  isActive        Boolean     @default(true)
+  lastTriggeredAt DateTime?
+  triggerCount    Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ============================================================
+// CREATIVE STUDIO
+// ============================================================
+
+model BrandSandboxAsset {
+  id              String      @id @default(cuid())
+  brand           String
+  season          String?     // SS26, FW26, etc.
+  type            AssetType
+  fileName        String
+  fileUrl         String      @db.Text
+  thumbnailUrl    String?     @db.Text
+  mimeType        String?
+  fileSizeKb      Int?
+  guidelines      Json?       // Parsed brand guidelines
+  tags            Json?       // Auto-generated tags
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  createdAt       DateTime    @default(now())
+}
+
+enum AssetType {
+  PRODUCT_IMAGE
+  LIFESTYLE_IMAGE
+  CAMPAIGN_IMAGE
+  LOOKBOOK_IMAGE
+  VIDEO
+  BRAND_GUIDELINES_PDF
+}
+
+model CreativeVariant {
+  id              String      @id @default(cuid())
+  name            String
+  brand           String?
+  format          CreativeFormat
+  contentType     ContentType
+  sourceAssetId   String?     // Brand sandbox asset used as source
+  imageUrl        String?     @db.Text
+  videoUrl        String?     @db.Text
+  headline        String?
+  primaryText     String?     @db.Text
+  description     String?
+  cta             String?     // SHOP_NOW, LEARN_MORE, etc.
+  aspectRatio     String?     // 9:16, 1:1, 16:9
+  status          CreativeStatus @default(DRAFT)
+  reviewedBy      String?
+  campaign        Campaign?   @relation(fields: [campaignId], references: [id])
+  campaignId      String?
+  archetype       CustomerArchetype?
+  funnelStage     FunnelStage?
+  // Performance tracking
+  impressions     Int         @default(0)
+  clicks          Int         @default(0)
+  conversions     Int         @default(0)
+  spend           Float       @default(0)
+  roas            Float?
+  fatigueScore    Float?      // 0-1, higher = more fatigued
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+enum CreativeFormat {
+  STATIC_IMAGE
+  VIDEO_SHORT     // 3-6 seconds
+  VIDEO_MEDIUM    // 6-15 seconds
+  VIDEO_LONG      // 15-30 seconds
+  CAROUSEL
+  COLLECTION
+}
+
+enum ContentType {
+  EDITORIAL
+  PRODUCT_FOCUSED
+  SOCIAL_PROOF
+  UGC
+  INFLUENCER_WHITELISTED
+}
+
+enum CreativeStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  LIVE
+  PAUSED
+  FATIGUED
+}
+
+// ============================================================
+// PRODUCT FEED (Google Shopping)
+// ============================================================
+
+model ProductFeedItem {
+  id              String      @id @default(cuid())
+  productId       String      // SKU or product ID
+  title           String
+  optimizedTitle  String?     // AI-optimized title
+  description     String?     @db.Text
+  optimizedDesc   String?     @db.Text
+  brand           String
+  category        String?
+  price           Float       // INR
+  salePrice       Float?
+  imageUrl        String?     @db.Text
+  lifestyleImageUrl String?   @db.Text  // On-model image
+  availability    String?     // in_stock, out_of_stock
+  stockLevel      Int?
+  sellThroughRate Float?
+  returnRate      Float?
+  marginTier      String?     // high_margin, medium_margin, halo_brand
+  brandTier       String?     // hero_brand, growth_brand, entry_brand
+  seasonLabel     String?     // current_season, last_season, evergreen
+  targetArchetype CustomerArchetype?
+  isActive        Boolean     @default(true)
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  updatedAt       DateTime    @updatedAt
+  @@unique([productId, organizationId])
+  @@index([organizationId, brand])
+}
+
+// ============================================================
+// EMAIL/SMS AUTOMATION
+// ============================================================
+
+model EmailFlow {
+  id              String      @id @default(cuid())
+  name            String
+  triggerType     String      // browse_abandon, cart_abandon, post_purchase, etc.
+  isActive        Boolean     @default(true)
+  config          Json        // Flow configuration
+  archetypeVariations Json?   // Different content per archetype
+  stats           Json?       // Open rate, CTR, conversions
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+// ============================================================
+// MERCHANDISING BRIDGE
+// ============================================================
+
+model BrandScore {
+  id              String      @id @default(cuid())
+  brand           String
+  overallScore    Float       // 0-100 Brand Heat Index
+  socialBuzz      Float?      // Component: social media mentions/sentiment
+  searchDemand    Float?      // Component: Google Trends / search volume
+  globalCredibility Float?    // Component: Lyst, BoF, department store presence
+  competitorPresence Float?   // Component: available on competing platforms
+  culturalRelevance Float?    // Component: celebrity wearing, Bollywood
+  priceMarketFit  Float?      // Component: price matches sweet spots
+  trend           String?     // RISING, STABLE, DECLINING
+  classification  String?     // POWER, GROWTH, HALO, UNDERPERFORMER
+  sellThroughPct  Float?
+  avgDiscount     Float?
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  scoredAt        DateTime    @default(now())
+  @@index([organizationId, brand])
+  @@index([scoredAt])
+}
+
+model SeasonNote {
+  id              String      @id @default(cuid())
+  brand           String
+  season          String      // SS26, FW26, etc.
+  riskFactor      String?     // MOTIF_CHANGE, SILHOUETTE_CHANGE, etc.
+  impact          String?     // e.g., "-40% sell-through"
+  rule            String?     @db.Text  // e.g., "IF motif changes, reduce buy 50%"
+  notes           String      @db.Text
+  createdBy       String?
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  createdAt       DateTime    @default(now())
+}
