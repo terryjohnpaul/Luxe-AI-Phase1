@@ -23,7 +23,6 @@ const AUSPICIOUS_DAYS_2026: AuspiciousDay[] = [
   { name: "Pushya Nakshatra Days", date2026: "2026-01-18", significance: "Monthly auspicious day for gold/jewelry purchases (occurs monthly)", shoppingImpact: "Premium accessories, jewelry, luxury items", regions: ["Pan India"] },
   { name: "Gudi Padwa / Ugadi", date2026: "2026-03-29", significance: "Hindu new year in Maharashtra and South India. New beginnings = new purchases.", shoppingImpact: "New wardrobe, auspicious beginning shopping", regions: ["Maharashtra", "Karnataka", "AP", "Telangana"] },
   { name: "Dussehra / Vijaya Dashami", date2026: "2026-10-12", significance: "Victory of good over evil. Auspicious for new beginnings and purchases.", shoppingImpact: "New clothes, vehicle purchases (we sell fashion, not cars, but the buying mood is there)", regions: ["Pan India"] },
-  { name: "Panchak-Free Weeks", date2026: "2026-04-15", significance: "Weeks without Panchak (inauspicious period) see elevated shopping", shoppingImpact: "General shopping uplift during muhurat windows", regions: ["North India"] },
 ];
 
 // Inauspicious periods (when NOT to push hard)

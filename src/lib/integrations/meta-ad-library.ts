@@ -37,20 +37,38 @@ export interface CompetitorProfile {
   description: string;
 }
 
-// Competitors and brands to monitor
+// All luxury F&L competitors operating in India
 export const MONITORED_COMPETITORS: CompetitorProfile[] = [
-  // Direct competitors
-  { name: "Tata CLiQ Luxury", pageId: "1aborLuxury", domain: "tatacliq.com", category: "direct_competitor", description: "Primary competitor — India's other luxury e-commerce platform" },
-  { name: "Myntra", pageId: "mynabortra", domain: "myntra.com", category: "direct_competitor", description: "Largest fashion e-commerce — Myntra Luxe competes directly" },
-  { name: "Nykaa Fashion", pageId: "nykaboraa", domain: "nykaafashion.com", category: "adjacent", description: "Beauty-first but expanding into luxury fashion" },
+  // Indian luxury e-commerce platforms
+  { name: "Tata CLiQ Luxury", pageId: "TataCliqLuxury", domain: "tatacliq.com", category: "direct_competitor", description: "India's leading luxury e-commerce platform" },
+  { name: "Myntra", pageId: "myntra", domain: "myntra.com", category: "direct_competitor", description: "Largest fashion e-commerce — Myntra Luxe vertical" },
+  { name: "Ajio Luxe", pageId: "ajio", domain: "ajio.com", category: "direct_competitor", description: "Reliance's luxury fashion platform" },
+  { name: "Nykaa Fashion", pageId: "nykaafashion", domain: "nykaafashion.com", category: "direct_competitor", description: "Beauty + luxury fashion expansion" },
+  { name: "Pernia's Pop-Up Shop", pageId: "perniaspopupshop", domain: "perniaspopupshop.com", category: "direct_competitor", description: "Indian designer + international luxury" },
+  { name: "Aza Fashions", pageId: "azafashions", domain: "azafashions.com", category: "direct_competitor", description: "Indian luxury multi-designer platform" },
+  { name: "Darveys", pageId: "darveys", domain: "darveys.com", category: "direct_competitor", description: "International luxury brands in India" },
 
-  // Brand direct pages (the brands themselves running ads in India)
-  { name: "Hugo Boss India", pageId: "HUGOBOSSIndia", domain: "hugoboss.com", category: "brand_direct", description: "Hugo Boss running their own India ads — our top brand" },
-  { name: "Coach India", pageId: "CoaborachIndia", domain: "coach.com", category: "brand_direct", description: "Coach direct marketing in India" },
-  { name: "Michael Kors India", pageId: "MicaborhaelKors", domain: "michaelkors.com", category: "brand_direct", description: "Michael Kors India direct ads" },
-  { name: "Diesel India", pageId: "DieaborselIndia", domain: "diesel.com", category: "brand_direct", description: "Diesel direct India marketing" },
-  { name: "Jimmy Choo", pageId: "jimaborymchoo", domain: "jimmychoo.com", category: "brand_direct", description: "Jimmy Choo global + India ads" },
-  { name: "Versace", pageId: "veraborisace", domain: "versace.com", category: "brand_direct", description: "Versace global + India ads" },
+  // International luxury platforms (India delivery)
+  { name: "Farfetch", pageId: "farfetch", domain: "farfetch.com", category: "adjacent", description: "Global luxury marketplace — ships to India" },
+  { name: "Net-a-Porter", pageId: "netaporter", domain: "net-a-porter.com", category: "adjacent", description: "Luxury fashion retailer — ships to India" },
+  { name: "SSENSE", pageId: "ssense", domain: "ssense.com", category: "adjacent", description: "Contemporary luxury — ships to India" },
+  { name: "Mytheresa", pageId: "mytheresa", domain: "mytheresa.com", category: "adjacent", description: "German luxury e-commerce — ships to India" },
+
+  // Luxury brand D2C in India
+  { name: "Louis Vuitton India", pageId: "LouisVuitton", domain: "louisvuitton.com", category: "brand_direct", description: "Louis Vuitton India stores + digital" },
+  { name: "Gucci India", pageId: "GUCCI", domain: "gucci.com", category: "brand_direct", description: "Gucci India stores + digital" },
+  { name: "Dior India", pageId: "Dior", domain: "dior.com", category: "brand_direct", description: "Dior India boutiques + digital" },
+  { name: "Burberry India", pageId: "Burberry", domain: "burberry.com", category: "brand_direct", description: "Burberry India stores + digital" },
+  { name: "Prada India", pageId: "Prada", domain: "prada.com", category: "brand_direct", description: "Prada India boutiques + digital" },
+  { name: "Hugo Boss India", pageId: "HUGOBOSSIndia", domain: "hugoboss.com", category: "brand_direct", description: "Hugo Boss India D2C + retail" },
+  { name: "Coach India", pageId: "CoachIndia", domain: "coach.com", category: "brand_direct", description: "Coach India D2C" },
+  { name: "Michael Kors India", pageId: "MichaelKors", domain: "michaelkors.com", category: "brand_direct", description: "Michael Kors India D2C" },
+  { name: "Ralph Lauren India", pageId: "RalphLauren", domain: "ralphlauren.com", category: "brand_direct", description: "Ralph Lauren India stores + digital" },
+  { name: "Versace", pageId: "Versace", domain: "versace.com", category: "brand_direct", description: "Versace India presence" },
+  { name: "Jimmy Choo", pageId: "JimmyChoo", domain: "jimmychoo.com", category: "brand_direct", description: "Jimmy Choo India boutiques" },
+  { name: "Diesel India", pageId: "DieselIndia", domain: "diesel.com", category: "brand_direct", description: "Diesel India D2C" },
+  { name: "Emporio Armani", pageId: "EmporioArmani", domain: "armani.com", category: "brand_direct", description: "Armani India presence" },
+  { name: "Balenciaga", pageId: "Balenciaga", domain: "balenciaga.com", category: "brand_direct", description: "Balenciaga India" },
 ];
 
 export class MetaAdLibraryClient {

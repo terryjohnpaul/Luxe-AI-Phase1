@@ -7,11 +7,12 @@
 
 import { Signal, signalId, expiresIn } from "./types";
 
+// Use "City, India" format to avoid ambiguity (e.g. Delhi, Ontario, Canada)
 const INDIAN_CITIES = [
-  "Mumbai", "Delhi", "Bangalore", "Hyderabad", "Chennai",
-  "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow",
-  "Chandigarh", "Kochi", "Goa", "Indore", "Surat",
-  "Gurgaon", "Noida", "Nagpur", "Coimbatore", "Vadodara",
+  "Mumbai, India", "New Delhi, India", "Bangalore, India", "Hyderabad, India", "Chennai, India",
+  "Kolkata, India", "Pune, India", "Ahmedabad, India", "Jaipur, India", "Lucknow, India",
+  "Chandigarh, India", "Kochi, India", "Goa, India", "Indore, India", "Surat, India",
+  "Gurgaon, India", "Noida, India", "Nagpur, India", "Coimbatore, India", "Vadodara, India",
 ];
 
 interface WeatherData {
@@ -31,13 +32,15 @@ async function fetchWeather(city: string): Promise<WeatherData | null> {
 
   try {
     const resp = await fetch(
-      `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${city}&aqi=yes`,
+      `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${encodeURIComponent(city)}&aqi=yes`,
       { signal: AbortSignal.timeout(10000) }
     );
     if (!resp.ok) return null;
     const data = await resp.json();
+    // Use clean city name for display (strip ", India" suffix)
+    const displayCity = city.replace(/, India$/i, "");
     return {
-      city,
+      city: displayCity,
       tempC: data.current.temp_c,
       feelsLikeC: data.current.feelslike_c,
       humidity: data.current.humidity,
@@ -78,7 +81,7 @@ export async function getWeatherSignals(): Promise<Signal[]> {
   }
 
   // Fetch weather for key cities (batch in groups of 5)
-  const citiesToCheck = ["Delhi", "Mumbai", "Bangalore", "Chennai", "Hyderabad", "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow"];
+  const citiesToCheck = INDIAN_CITIES;
 
   for (let i = 0; i < citiesToCheck.length; i += 5) {
     const batch = citiesToCheck.slice(i, i + 5);
@@ -151,19 +154,24 @@ export async function getWeatherSignals(): Promise<Signal[]> {
       }
 
       // === POOR AIR QUALITY (AQI > 150) ===
+      // Merge NCR cities (New Delhi, Gurgaon, Noida) into one signal to avoid duplicates
+      const NCR_CITIES = ["new delhi", "gurgaon", "noida"];
+      const isNCR = NCR_CITIES.includes(weather.city.toLowerCase());
+      const aqiKey = isNCR ? "ncr" : weather.city.toLowerCase();
+      const aqiCity = isNCR ? "Delhi NCR" : weather.city;
       if (weather.aqi && weather.aqi > 150) {
         signals.push({
-          id: signalId("weather", `aqi-${weather.city.toLowerCase()}`),
+          id: signalId("weather", `aqi-${aqiKey}`),
           type: "weather",
           source: "weatherapi",
-          title: `${weather.city} poor AQI: ${Math.round(weather.aqi)} PM2.5`,
-          description: `Air quality unhealthy in ${weather.city}. People staying indoors and browsing online 40% more. Double down on digital ads for this city.`,
-          location: weather.city,
+          title: `${aqiCity} poor AQI: ${Math.round(weather.aqi)} PM2.5`,
+          description: `Air quality unhealthy in ${aqiCity}. People staying indoors and browsing online 40% more. Double down on digital ads for this region.`,
+          location: aqiCity,
           severity: weather.aqi > 300 ? "high" : "medium",
           triggersWhat: "Indoor browsing spike = opportunity. Push all categories. People have time to browse.",
           targetArchetypes: ["All"],
           suggestedBrands: ["All brands"],
-          suggestedAction: `AQI ${Math.round(weather.aqi)} in ${weather.city}. People indoors browsing. Increase ${weather.city} campaign budgets 20%. They have time and attention.`,
+          suggestedAction: `AQI ${Math.round(weather.aqi)} in ${aqiCity}. People indoors browsing. Increase ${aqiCity} campaign budgets 20%. They have time and attention.`,
           confidence: 0.70,
           expiresAt: expiresIn(6),
           data: weather,

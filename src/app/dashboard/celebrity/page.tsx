@@ -95,6 +95,7 @@ function getBusinessProfile(): { type: "brand" | "marketplace"; brandName?: stri
 export default function CelebrityPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterUrgency, setFilterUrgency] = useState("all");
   const [filterBrand, setFilterBrand] = useState("all");
   const [expandedMoment, setExpandedMoment] = useState<string | null>(null);
@@ -105,9 +106,12 @@ export default function CelebrityPage() {
 
   useEffect(() => {
     fetch("/api/celebrity-moments")
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Failed to fetch celebrity moments (${r.status})`);
+        return r.json();
+      })
       .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch((err) => { setError(err.message || "Failed to load celebrity intelligence"); setLoading(false); });
   }, []);
 
   const copyText = (text: string, id: string) => {
@@ -127,7 +131,18 @@ export default function CelebrityPage() {
     );
   }
 
-  if (!data) return null;
+  if (error || !data) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <Camera size={32} className="text-muted mx-auto mb-3" />
+          <p className="text-sm text-muted">{error || "No celebrity intelligence data available."}</p>
+          <button onClick={() => { setError(null); setLoading(true); fetch("/api/celebrity-moments").then(r => r.json()).then(d => { setData(d); setLoading(false); }).catch(() => { setError("Failed to load"); setLoading(false); }); }}
+            className="mt-3 text-xs text-brand-blue hover:underline">Try again</button>
+        </div>
+      </div>
+    );
+  }
 
   // Filter by business mode + active brand tiers
   const tierFilteredMoments = data.moments.filter(m => {

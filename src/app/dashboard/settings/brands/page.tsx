@@ -107,7 +107,7 @@ export default function BrandSettingsPage() {
 
       {/* Tier Overview Cards */}
       <div className="grid grid-cols-3 gap-4">
-        {(["luxury", "premium", "accessible"] as const).filter(t => activeTiers.includes(t)).map((tier) => {
+        {(["luxury", "premium", "accessible"] as const).map((tier) => {
           const rule = TIER_RULES[tier];
           const colors = tierColors[tier];
           const Icon = colors.icon;
@@ -153,7 +153,7 @@ export default function BrandSettingsPage() {
       </div>
 
       {/* Brand List by Tier */}
-      {(["luxury", "premium", "accessible"] as const).filter(t => activeTiers.includes(t)).map((tier) => {
+      {(["luxury", "premium", "accessible"] as const).map((tier) => {
         const rule = TIER_RULES[tier];
         const colors = tierColors[tier];
         const tierBrands = brandsByTier(tier);

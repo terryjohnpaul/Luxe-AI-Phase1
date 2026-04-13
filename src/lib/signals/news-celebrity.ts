@@ -42,8 +42,9 @@ async function searchNews(query: string): Promise<NewsArticle[]> {
   if (!apiKey) return [];
 
   try {
+    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
     const resp = await fetch(
-      `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=5&apiKey=${apiKey}`,
+      `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&pageSize=5&from=${weekAgo}&apiKey=${apiKey}`,
       { signal: AbortSignal.timeout(10000) }
     );
     if (!resp.ok) return [];
@@ -87,8 +88,34 @@ export async function getNewsCelebritySignals(): Promise<Signal[]> {
     return signals;
   }
 
-  // Search for celebrity + fashion mentions
-  const celebFashionArticles = await searchNews("Bollywood celebrity fashion outfit 2026");
+  // Search for each top celeb individually + general fashion queries
+  const celebQueries = [
+    "Deepika Padukone fashion",
+    "Alia Bhatt style outfit",
+    "Ranveer Singh fashion",
+    "Janhvi Kapoor outfit",
+    "Virat Kohli style",
+  ];
+  const generalQueries = [
+    "Bollywood celebrity luxury fashion 2026",
+    "celebrity airport look India",
+    "India luxury brand celebrity",
+  ];
+
+  const allArticles: NewsArticle[] = [];
+  // Search top 3 celeb queries + 2 general = 5 API calls, 5 results each = 25 articles
+  for (const q of [...celebQueries.slice(0, 3), ...generalQueries.slice(0, 2)]) {
+    const articles = await searchNews(q);
+    allArticles.push(...articles);
+  }
+
+  // Deduplicate by title
+  const seen = new Set<string>();
+  const celebFashionArticles = allArticles.filter(a => {
+    if (seen.has(a.title)) return false;
+    seen.add(a.title);
+    return true;
+  });
 
   for (const article of celebFashionArticles) {
     // Check if any monitored celebrity is mentioned
@@ -104,27 +131,33 @@ export async function getNewsCelebritySignals(): Promise<Signal[]> {
     );
 
     if (mentionedCeleb || mentionedBrand) {
+      const title = mentionedCeleb && mentionedBrand
+        ? `${mentionedCeleb} confirmed wearing ${mentionedBrand} in news`
+        : mentionedCeleb
+        ? `${mentionedCeleb} trending in news — ad opportunity for luxury fashion`
+        : `${mentionedBrand} in fashion news — brand visibility spike`;
+
+      const why = mentionedCeleb && mentionedBrand
+        ? `Article confirms ${mentionedCeleb} wearing ${mentionedBrand}. Direct brand moment — fans will search for the exact product. Run ${mentionedBrand} ads NOW.`
+        : mentionedCeleb
+        ? `${mentionedCeleb} is trending in news. When celebs trend, fans search their style. Push their affiliated luxury fashion brands to capture the search spike.`
+        : `${mentionedBrand} getting press coverage. Brand awareness is spiking — boost ${mentionedBrand} campaigns on luxury fashion to ride the wave.`;
+
       signals.push({
         id: signalId("news", `celeb-${(mentionedCeleb || mentionedBrand || "").toLowerCase().replace(/\s+/g, "-")}`),
         type: "celebrity",
         source: "newsapi",
-        title: mentionedCeleb && mentionedBrand
-          ? `${mentionedCeleb} spotted in ${mentionedBrand}`
-          : mentionedCeleb
-          ? `${mentionedCeleb} fashion moment in news`
-          : `${mentionedBrand} mentioned in celebrity fashion news`,
-        description: `${article.title}. Source: ${article.source}`,
+        title,
+        description: `${article.title}. Source: ${article.source}.\n\nWHY THIS SIGNAL: ${why}`,
         location: "Pan India",
         severity: mentionedCeleb && mentionedBrand ? "high" : "medium",
         triggersWhat: mentionedBrand
-          ? `Push ${mentionedBrand} products. Ride the celebrity association.`
-          : "Monitor for brand identification. Create 'get the look' content.",
+          ? `Push ${mentionedBrand} products on luxury fashion. Ride the celebrity association.`
+          : "Celebrity is trending — push their brand affinities on luxury fashion.",
         targetArchetypes: ["Fashion Loyalist", "Aspirant"],
         suggestedBrands: mentionedBrand ? [mentionedBrand] : ["All brands — identify the outfit"],
-        suggestedAction: mentionedCeleb && mentionedBrand
-          ? `${mentionedCeleb} wearing ${mentionedBrand}! Boost ${mentionedBrand} campaigns. Consider topical Reels content.`
-          : `Celebrity fashion moment detected. Check article and create relevant content.`,
-        confidence: 0.60,
+        suggestedAction: why,
+        confidence: mentionedCeleb && mentionedBrand ? 0.90 : 0.65,
         expiresAt: expiresIn(48),
         data: { article, mentionedCeleb, mentionedBrand },
         detectedAt: today,

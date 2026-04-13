@@ -59,16 +59,29 @@ function getPlatformIcon(platform: string) {
 export default function CompetitorsPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filterCompetitor, setFilterCompetitor] = useState("all");
   const [filterPlatform, setFilterPlatform] = useState("all");
   const [expandedAd, setExpandedAd] = useState<number | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/competitors");
+      if (!res.ok) throw new Error(`API returned ${res.status}`);
+      const d = await res.json();
+      setData(d);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch competitor data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetch("/api/competitors", { signal: AbortSignal.timeout(45000) })
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    fetchData();
   }, []);
 
   const copyText = (text: string, id: string) => {
@@ -88,7 +101,22 @@ export default function CompetitorsPage() {
     );
   }
 
-  if (!data) return (<div className="p-6 text-center"><p className="text-muted">Failed to load competitor data. Try refreshing the page.</p></div>);
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <AlertTriangle size={32} className="text-red-500 mx-auto mb-4" />
+          <p className="text-sm text-red-600 font-medium mb-2">Failed to load competitor data</p>
+          <p className="text-xs text-muted mb-4">{error}</p>
+          <button onClick={fetchData} className="btn-secondary">
+            <RefreshCw size={14} /> Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   const competitors = [...new Set(data.ads.map(a => a.competitor))];
   const filteredAds = data.ads.filter(a =>
@@ -107,7 +135,9 @@ export default function CompetitorsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="btn-secondary"><RefreshCw size={14} /> Refresh</button>
+          <button onClick={fetchData} disabled={loading} className="btn-secondary">
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
+          </button>
           <a href="https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=IN&q=luxury%20fashion" target="_blank" className="btn-secondary">
             <ExternalLink size={14} /> Meta Ad Library
           </a>
@@ -124,7 +154,7 @@ export default function CompetitorsPage() {
           { label: "Competitors Monitored", value: data.summary.competitors.toString(), color: "red", icon: Target },
           { label: "Meta Ads", value: data.summary.metaAds.toString(), color: "purple", icon: Instagram },
           { label: "Google Ads", value: data.summary.googleAds.toString(), color: "green", icon: Globe },
-          { label: "API Status", value: data.apiStatus.metaAdLibrary === "connected" ? "Live" : "Demo", color: "orange", icon: BarChart3 },
+          { label: "API Status", value: data.apiStatus.googleTransparency !== "demo_mode" || data.apiStatus.metaAdLibrary === "connected" ? "Live" : "Demo", color: "orange", icon: BarChart3 },
         ].map((s) => (
           <div key={s.label} className={`stat-card stat-card-${s.color}`}>
             <div className="flex items-start justify-between">
@@ -138,15 +168,14 @@ export default function CompetitorsPage() {
         ))}
       </div>
 
-      {/* API Status Banner */}
-      {data.apiStatus.metaAdLibrary === "demo_mode" && (
+      {/* API Status Banner — only show if BOTH sources are in demo mode */}
+      {data.apiStatus.metaAdLibrary === "demo_mode" && data.apiStatus.googleTransparency === "demo_mode" && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-3">
           <AlertTriangle size={18} className="text-yellow-600 shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-yellow-800">Demo Mode — showing realistic sample data</p>
+            <p className="text-sm font-medium text-yellow-800">Demo Mode — showing sample data</p>
             <p className="text-xs text-yellow-700 mt-0.5">
-              Add <code className="bg-yellow-100 px-1 rounded">META_AD_LIBRARY_TOKEN</code> and <code className="bg-yellow-100 px-1 rounded">SERPAPI_KEY</code> to .env for real competitor ads.
-              Meta Ad Library is FREE. SerpApi is $50/month.
+              Connect <code className="bg-yellow-100 px-1 rounded">APIFY_API_TOKEN</code> and <code className="bg-yellow-100 px-1 rounded">DATAFORSEO_LOGIN</code> for live competitor ad intelligence.
             </p>
           </div>
         </div>

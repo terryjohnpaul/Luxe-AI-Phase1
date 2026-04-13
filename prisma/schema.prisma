@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // URL is provided via prisma.config.ts for Prisma 7
 }
 
 // ============================================================
@@ -83,6 +83,13 @@ model Organization {
   seasonNotes SeasonNote[]
   productFeed ProductFeedItem[]
   emailFlows  EmailFlow[]
+  // Flywheel learning loop
+  signalLogs         SignalLog[]
+  flywhRecommendations FlywhRecommendation[]
+  campaignOutcomes   CampaignOutcome[]
+  predictionEvals    PredictionEval[]
+  featureRecords     FeatureRecord[]
+  learningModels     LearningModel[]
   settings    Json     @default("{}")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -553,4 +560,217 @@ model SeasonNote {
   organization    Organization @relation(fields: [organizationId], references: [id])
   organizationId  String
   createdAt       DateTime    @default(now())
+}
+
+// ============================================================
+// FEEDBACK FLYWHEEL — Learning Loop
+// ============================================================
+
+// Permanent log of every signal detected (training data)
+model SignalLog {
+  id              String      @id @default(cuid())
+  signalId        String      // Runtime ID e.g. "festival-diwali-2026-04-10"
+  type            String      // weather, competitor, festival, celebrity, etc.
+  source          String      // API/method that detected this
+  severity        String      // critical, high, medium, low
+  confidence      Float       // 0-1
+  title           String
+  description     String      @db.Text
+  location        String?
+  data            Json        // Full signal payload
+  expiresAt       DateTime?
+  detectedAt      DateTime
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  organizationId  String?
+
+  recommendations FlywhRecommendation[]
+
+  @@index([organizationId, type, detectedAt])
+  @@index([signalId, detectedAt])
+}
+
+// System's recommendation output — what we suggested
+model FlywhRecommendation {
+  id                String      @id @default(cuid())
+  signalLog         SignalLog   @relation(fields: [signalLogId], references: [id])
+  signalLogId       String
+  signalType        String      // denormalized for fast queries
+  priority          String      // urgent, high, medium, opportunity
+  title             String
+  description       String      @db.Text
+  tierMode          String      // luxury, premium, accessible, or combo
+
+  // Recommendation details stored as JSON for flexibility
+  creativePayload   Json        // direction, brands, headlines, body texts, CTA
+  targetingPayload  Json        // archetypes, location, timing, platform split
+  budgetPayload     Json        // suggested budget, duration, bid strategy
+  predictionPayload Json        // full prediction: CTR, conv, ROAS, factors, methodology
+
+  // Predicted values (denormalized for queries)
+  predictedCtr      Float?
+  predictedConvRate Float?
+  predictedRoas     Float?
+  predictedRoasLow  Float?      // confidence interval lower
+  predictedRoasHigh Float?      // confidence interval upper
+  confidenceScore   Float       // 0-1
+
+  // Model tracking
+  modelVersion      String      @default("v1.0.0")
+
+  // Status
+  status            String      @default("pending") // pending, viewed, approved, edited, skipped, expired
+  linkedCampaignId  String?     // External campaign ID after user runs it
+
+  organization      Organization? @relation(fields: [organizationId], references: [id])
+  organizationId    String?
+  createdAt         DateTime    @default(now())
+  expiresAt         DateTime?
+
+  userActions       FlywhUserAction[]
+  campaignOutcomes  CampaignOutcome[]
+  predictionEvals   PredictionEval[]
+
+  @@index([organizationId, createdAt])
+  @@index([signalLogId])
+  @@index([signalType, status])
+  @@index([modelVersion])
+}
+
+// Every user interaction with a recommendation
+model FlywhUserAction {
+  id                String      @id @default(cuid())
+  recommendation    FlywhRecommendation @relation(fields: [recommendationId], references: [id])
+  recommendationId  String
+  userId            String?
+  action            String      // viewed, expanded, edited, approved, skipped, copied_text, opened_guide
+  dwellTimeMs       Int?        // time spent on this card
+  editPayload       Json?       // what user changed (budget, copy, etc.)
+  sessionId         String?
+  createdAt         DateTime    @default(now())
+
+  @@index([recommendationId, action])
+  @@index([userId, createdAt])
+}
+
+// Actual campaign results linked back to recommendations
+model CampaignOutcome {
+  id                String      @id @default(cuid())
+  recommendation    FlywhRecommendation? @relation(fields: [recommendationId], references: [id])
+  recommendationId  String?
+  platform          String      // meta, google
+  externalCampaignId String
+  dateStart         DateTime    @db.Date
+  dateEnd           DateTime    @db.Date
+  impressions       Int         @default(0)
+  clicks            Int         @default(0)
+  spend             Float       @default(0)
+  conversions       Float       @default(0)
+  revenue           Float       @default(0)
+  ctr               Float?
+  roas              Float?
+  cpa               Float?
+  organization      Organization? @relation(fields: [organizationId], references: [id])
+  organizationId    String?
+  fetchedAt         DateTime    @default(now())
+
+  predictionEvals   PredictionEval[]
+
+  @@index([recommendationId])
+  @@index([organizationId, dateStart])
+}
+
+// Predicted vs actual comparison — the learning signal
+model PredictionEval {
+  id                String      @id @default(cuid())
+  recommendation    FlywhRecommendation @relation(fields: [recommendationId], references: [id])
+  recommendationId  String
+  campaignOutcome   CampaignOutcome? @relation(fields: [campaignOutcomeId], references: [id])
+  campaignOutcomeId String?
+
+  // Predicted
+  predictedCtr      Float?
+  predictedConvRate Float?
+  predictedRoas     Float?
+
+  // Actual
+  actualCtr         Float?
+  actualConvRate    Float?
+  actualRoas        Float?
+  actualSpend       Float?
+  actualRevenue     Float?
+
+  // Error metrics
+  roasError         Float?      // actual - predicted
+  roasErrorPct      Float?      // (actual - predicted) / predicted
+  withinCI          Boolean?    // was actual within confidence interval?
+
+  // Context (denormalized for learning)
+  signalType        String
+  severity          String
+  confidence        Float
+  tierMode          String?
+
+  // Scoring
+  accuracy          Float?      // composite accuracy 0-1
+  evaluationWindow  Int         @default(14) // days of data used
+
+  modelVersion      String
+  organization      Organization? @relation(fields: [organizationId], references: [id])
+  organizationId    String?
+  evaluatedAt       DateTime    @default(now())
+
+  @@index([organizationId, signalType])
+  @@index([modelVersion, evaluatedAt])
+}
+
+// Denormalized feature vectors for ML training
+model FeatureRecord {
+  id              String      @id @default(cuid())
+  signalType      String
+  severity        String
+  confidence      Float
+  tierMode        String?
+  location        String?
+  dayOfWeek       Int?
+  monthOfYear     Int?
+  isSalaryWeek    Boolean     @default(false)
+  isWeekend       Boolean     @default(false)
+  isHoliday       Boolean     @default(false)
+
+  // Actuals
+  actualCtr       Float?
+  actualConvRate  Float?
+  actualRoas      Float?
+  actualCpa       Float?
+
+  modelVersion    String
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  organizationId  String?
+  createdAt       DateTime    @default(now())
+
+  @@index([organizationId, signalType])
+  @@index([modelVersion])
+}
+
+// Bayesian model parameters — learned per org + signal type
+model LearningModel {
+  id              String      @id @default(cuid())
+  version         String      // e.g. "v1.0.0"
+  signalType      String?     // null = global model
+  tierMode        String?
+
+  // Bayesian parameters (Beta distribution for rates, stored as JSON)
+  parameters      Json        // { ctr: {alpha, beta}, convRate: {alpha, beta}, roas: {mean, variance, n} }
+
+  trainingDataCount Int       @default(0)
+  accuracy        Float?      // measured accuracy
+  isActive        Boolean     @default(true)
+
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  organizationId  String?     // null = cross-org global model
+  trainedAt       DateTime    @default(now())
+  createdAt       DateTime    @default(now())
+
+  @@index([organizationId, signalType, isActive])
+  @@index([version])
 }

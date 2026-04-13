@@ -4,13 +4,37 @@ import {
   getBudgetWindows,
   getCreativeFatigueAlerts,
   getEventStacks,
+  getSmartRecommendationSignals,
 } from "@/lib/signals/smart-recommendations";
+import { getOccasionDressingSignals } from "@/lib/signals/occasion-dressing";
+import { getGiftOccasionSignals } from "@/lib/signals/gift-occasions";
+import { getSaleEventSignals } from "@/lib/signals/sale-events";
+import { cachedFetch, registerForPrewarm } from "@/lib/api-cache";
 
-export async function GET() {
+async function fetchSmartIntelData() {
   const cities = getCityRecommendations();
   const budgetWindows = getBudgetWindows();
   const creativeFatigue = getCreativeFatigueAlerts();
   const eventStacks = getEventStacks();
+
+  // Fetch all signal sources (occasion-dressing is async due to Apify call)
+  const [smartSignals, occasionSignals, giftSignals, saleSignals] =
+    await Promise.all([
+      Promise.resolve(getSmartRecommendationSignals()),
+      getOccasionDressingSignals(),
+      Promise.resolve(getGiftOccasionSignals()),
+      Promise.resolve(getSaleEventSignals()),
+    ]);
+
+  const allSignals = [
+    ...smartSignals,
+    ...occasionSignals,
+    ...giftSignals,
+    ...saleSignals,
+  ].sort((a, b) => {
+    const sev = { critical: 0, high: 1, medium: 2, low: 3 };
+    return (sev[a.severity] ?? 4) - (sev[b.severity] ?? 4);
+  });
 
   const fatigueAlerts = creativeFatigue.filter(
     (f) => f.fatigueLevel !== "healthy"
@@ -36,16 +60,26 @@ export async function GET() {
     return false;
   }).length;
 
-  return NextResponse.json({
+  return {
     cities,
     budgetWindows,
     creativeFatigue,
     eventStacks,
+    signals: allSignals,
     summary: {
       citiesMonitored: cities.length,
       activeWindows,
       fatigueAlerts,
       activeStacks: eventStacks.length,
+      totalSignals: allSignals.length,
     },
-  });
+  };
+}
+
+registerForPrewarm("smart-intel", fetchSmartIntelData);
+
+export async function GET(request: Request) {
+  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "true";
+  const { data } = await cachedFetch("smart-intel", fetchSmartIntelData, forceRefresh);
+  return NextResponse.json(data);
 }

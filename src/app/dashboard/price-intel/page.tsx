@@ -42,15 +42,19 @@ function formatINR(amount: number) {
 export default function PriceIntelPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
   const [competitorFilter, setCompetitorFilter] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/price-intel")
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Failed to fetch price intel (${r.status})`);
+        return r.json();
+      })
       .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(err => { setError(err.message || "Failed to load price intelligence"); setLoading(false); });
   }, []);
 
   const copyAdBrief = (item: CompetitorPriceChange) => {
@@ -75,6 +79,21 @@ export default function PriceIntelPage() {
         <div className="text-center">
           <Loader2 size={32} className="animate-spin text-amber-500 mx-auto mb-4" />
           <p className="text-sm text-muted">Scanning competitor prices across Tata CLiQ Luxury, Myntra & brand stores...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <AlertTriangle size={32} className="text-red-500 mx-auto mb-4" />
+          <p className="text-sm text-muted">{error}</p>
+          <button onClick={() => { setError(null); setLoading(true); fetch("/api/price-intel").then(r => r.json()).then(d => { setData(d); setLoading(false); }).catch(e => { setError(e.message); setLoading(false); }); }}
+            className="mt-3 text-xs text-brand-blue hover:underline">
+            Try again
+          </button>
         </div>
       </div>
     );

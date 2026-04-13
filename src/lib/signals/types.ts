@@ -42,7 +42,16 @@ export type SignalCategory =
   | "regional"
   | "ott_release"
   | "social_trend"
-  | "travel";
+  | "travel"
+  | "gift_occasion"
+  | "sale_event"
+  | "occasion_dressing"
+  | "fashion_event"
+  | "wedding"
+  | "aesthetic"
+  | "runway"
+  | "launch"
+  | "category_demand";
 
 export interface SignalSourceConfig {
   name: string;

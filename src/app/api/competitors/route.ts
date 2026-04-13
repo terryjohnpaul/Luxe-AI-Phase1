@@ -1,160 +1,230 @@
 import { NextResponse } from "next/server";
 import { MONITORED_COMPETITORS } from "@/lib/integrations/meta-ad-library";
 import { GOOGLE_MONITORED_COMPETITORS } from "@/lib/integrations/google-ad-transparency";
+import { getCompetitorPricingSignals } from "@/lib/signals/competitor-pricing";
+// Meta Ad Library scraping disabled — Apify actor input format issues
+import { cachedFetch, registerForPrewarm } from "@/lib/api-cache";
 
-const mockCompetitorAds = [
-  {
-    competitor: "Tata CLiQ Luxury",
-    platform: "Meta",
-    adType: "Carousel",
-    headline: "Luxury at Your Doorstep — Up to 40% Off",
-    body: "Shop the finest luxury brands with Tata CLiQ Luxury. Hugo Boss, Coach, Michael Kors & more. Free delivery on orders above INR 5,000.",
-    cta: "Shop Now",
-    estimatedSpend: "INR 2-5L/week",
-    impressions: "10-15 lakh/week",
-    status: "active",
-    startDate: "2026-03-15",
-    platforms: ["Instagram Feed", "Facebook Feed", "Instagram Stories"],
-    targeting: "India, 25-55, Interest: Luxury Fashion",
-    snapshotUrl: "https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=IN&q=tata%20cliq%20luxury",
-    insight: "Running discount-heavy messaging. 40% off headline — this is the anti-luxury approach. We should counter with aspiration, NOT match their discounts.",
-  },
-  {
-    competitor: "Tata CLiQ Luxury",
-    platform: "Meta",
-    adType: "Reels",
-    headline: "HSBC Luxe Avenue — Exclusive Access",
-    body: "HSBC cardholders get exclusive early access to luxury brands. Shop now and earn 5x reward points. Premium delivery to your door.",
-    cta: "Shop Now",
-    estimatedSpend: "INR 1-3L/week",
-    impressions: "5-8 lakh/week",
-    status: "active",
-    startDate: "2026-03-20",
-    platforms: ["Instagram Reels", "Facebook Reels"],
-    targeting: "India, HSBC cardholders, 30-50, High income",
-    snapshotUrl: "",
-    insight: "HSBC bank partnership ad. They're locking in HNI customers through credit card relationships. We need a similar Amex/HDFC partnership.",
-  },
-  {
-    competitor: "Tata CLiQ Luxury",
-    platform: "Google",
-    adType: "Search",
-    headline: "Luxury Fashion India — Tata CLiQ Luxury™",
-    body: "Shop 4,100+ Luxury Brands. Free Delivery. Easy Returns. Gucci, Burberry, Coach & More. India's Premier Luxury Destination.",
-    cta: "Visit Site",
-    estimatedSpend: "INR 3-6L/week",
-    impressions: "N/A (Search)",
-    status: "active",
-    startDate: "2026-01-01",
-    platforms: ["Google Search"],
-    targeting: "Keywords: luxury fashion India, designer brands online, buy luxury online",
-    snapshotUrl: "https://adstransparency.google.com",
-    insight: "Bidding on generic luxury keywords. Claiming '4,100+ brands' — we have 800+. They're winning on catalog breadth messaging.",
-  },
-  {
-    competitor: "Myntra",
-    platform: "Meta",
-    adType: "Video",
-    headline: "Myntra Luxe — Designer Fashion",
-    body: "Shop premium designer brands with up to 60% off. Myntra Luxe brings you the world's best fashion. Easy returns. Fast delivery.",
-    cta: "Shop Now",
-    estimatedSpend: "INR 8-15L/week",
-    impressions: "30-50 lakh/week",
-    status: "active",
-    startDate: "2026-03-01",
-    platforms: ["Instagram Reels", "YouTube", "Facebook Feed"],
-    targeting: "India, 18-45, Broad",
-    snapshotUrl: "",
-    insight: "Massive budget. '60% off' messaging — targeting price-sensitive mass premium, not true luxury. Different customer entirely. Don't compete on price.",
-  },
-  {
-    competitor: "Hugo Boss India",
-    platform: "Meta",
-    adType: "Static Image",
-    headline: "BOSS Spring Summer 2026",
-    body: "Discover the new BOSS Spring Summer collection. Modern tailoring meets relaxed sophistication.",
-    cta: "Explore",
-    estimatedSpend: "INR 50K-1L/week",
-    impressions: "3-5 lakh/week",
-    status: "active",
-    startDate: "2026-03-10",
-    platforms: ["Instagram Feed", "Instagram Stories"],
-    targeting: "India, 25-50, Male, Interest: Fashion, Business",
-    snapshotUrl: "",
-    insight: "Hugo Boss running their own India campaign. Aspirational tone, no discounts. Our Hugo Boss ads should complement, not compete with their brand ads.",
-  },
-  {
-    competitor: "Hugo Boss India",
-    platform: "Google",
-    adType: "Shopping",
-    headline: "Hugo Boss Polo Shirt — Official Store",
-    body: "Shop authentic Hugo Boss polo shirts. Starting INR 5,999. Free shipping. Official Hugo Boss India.",
-    cta: "Shop Now",
-    estimatedSpend: "INR 30K-80K/week",
-    impressions: "N/A (Shopping)",
-    status: "active",
-    startDate: "2026-02-01",
-    platforms: ["Google Shopping"],
-    targeting: "Keywords: Hugo Boss polo, Hugo Boss India, Boss polo shirt price",
-    snapshotUrl: "",
-    insight: "Hugo Boss starting at INR 5,999 on their own store. Our Hugo Boss starts at INR 3,500. We have a price advantage on some items.",
-  },
-  {
-    competitor: "Coach India",
-    platform: "Meta",
-    adType: "Carousel",
-    headline: "The Tabby — Coach's Most Iconic Bag",
-    body: "The bag that defined a generation. Discover the Tabby collection in new seasonal colors. Handcrafted since 1941.",
-    cta: "Shop Now",
-    estimatedSpend: "INR 40K-1L/week",
-    impressions: "2-4 lakh/week",
-    status: "active",
-    startDate: "2026-03-18",
-    platforms: ["Instagram Feed", "Instagram Stories", "Facebook Feed"],
-    targeting: "India, 22-40, Female, Interest: Handbags, Fashion",
-    snapshotUrl: "",
-    insight: "Coach pushing Tabby bag hard — it's their hero product. We carry Coach Tabby. Ride their brand awareness and retarget their audience with our pricing.",
-  },
-  {
-    competitor: "Diesel India",
-    platform: "Meta",
-    adType: "Reels",
-    headline: "For Successful Living",
-    body: "Diesel 1DR bag. The cult bag everyone's talking about. Available now in India.",
-    cta: "Explore",
-    estimatedSpend: "INR 20K-60K/week",
-    impressions: "1-3 lakh/week",
-    status: "active",
-    startDate: "2026-03-22",
-    platforms: ["Instagram Reels"],
-    targeting: "India, 20-35, Interest: Streetwear, Luxury",
-    snapshotUrl: "",
-    insight: "Diesel pushing 1DR bag on Reels. Young male audience. If we carry this bag, we should create similar Reels content showing it on Ajio Luxe.",
-  },
+// Search these names in Meta Ad Library for competitor ad creatives
+const COMPETITOR_NAMES = [
+  "Tata CLiQ Luxury",
+  "Myntra",
+  "Darveys",
+  "Hugo Boss",
+  "Coach",
+  "Louis Vuitton",
+  "Gucci",
+  "Burberry",
+  "Michael Kors",
+  "Versace",
 ];
+
+interface CompetitorAd {
+  competitor: string;
+  platform: string;
+  adType: string;
+  headline: string;
+  body: string;
+  cta: string;
+  estimatedSpend: string;
+  impressions: string;
+  status: string;
+  startDate: string;
+  platforms: string[];
+  targeting: string;
+  snapshotUrl: string;
+  insight: string;
+}
+
+/**
+ * Transform Apify Meta Ad Library results into our CompetitorAd format.
+ */
+function transformMetaAds(apifyItems: any[]): CompetitorAd[] {
+  return apifyItems.map((item) => {
+    const pageName = item.pageName || item.page_name || "Unknown";
+    const matchedCompetitor =
+      COMPETITOR_NAMES.find((c) =>
+        pageName.toLowerCase().includes(c.toLowerCase())
+      ) || pageName;
+
+    // Determine ad type from media
+    let adType = "Static Image";
+    if (item.snapshot?.videos?.length) adType = "Video";
+    else if (item.snapshot?.cards?.length > 1) adType = "Carousel";
+
+    const bodyText =
+      item.snapshot?.body?.text ||
+      item.ad_creative_bodies?.[0] ||
+      item.body ||
+      "";
+    const headlineText =
+      item.snapshot?.title ||
+      item.ad_creative_link_titles?.[0] ||
+      item.title ||
+      bodyText.slice(0, 80);
+    const ctaText =
+      item.snapshot?.cta_text ||
+      item.ad_creative_link_captions?.[0] ||
+      "Shop Now";
+    const linkUrl =
+      item.snapshot?.link_url || item.ad_snapshot_url || item.collationId
+        ? `https://www.facebook.com/ads/library/?id=${item.collationId || item.id || ""}`
+        : "";
+
+    // Placements
+    const platforms: string[] = [];
+    if (item.publisherPlatform || item.publisher_platforms) {
+      const pubs = item.publisherPlatform || item.publisher_platforms || [];
+      const pubList = Array.isArray(pubs) ? pubs : [pubs];
+      pubList.forEach((p: string) => {
+        const lower = (p || "").toLowerCase();
+        if (lower.includes("instagram")) platforms.push("Instagram Feed");
+        else if (lower.includes("facebook")) platforms.push("Facebook Feed");
+        else if (lower.includes("messenger")) platforms.push("Messenger");
+        else if (lower.includes("audience")) platforms.push("Audience Network");
+        else platforms.push(p);
+      });
+    }
+    if (platforms.length === 0) platforms.push("Instagram Feed", "Facebook Feed");
+
+    // Start date
+    const startDate =
+      item.startDate ||
+      item.ad_delivery_start_time ||
+      new Date().toISOString().slice(0, 10);
+
+    return {
+      competitor: matchedCompetitor,
+      platform: "Meta",
+      adType,
+      headline: headlineText.slice(0, 120),
+      body: bodyText.slice(0, 300),
+      cta: ctaText,
+      estimatedSpend: "N/A (Meta Ad Library)",
+      impressions: item.impressions
+        ? `${item.impressions.lower_bound || ""}–${item.impressions.upper_bound || ""}`
+        : "N/A",
+      status: item.isActive !== false ? "active" : "inactive",
+      startDate: typeof startDate === "string" ? startDate.slice(0, 10) : startDate,
+      platforms,
+      targeting:
+        item.demographicDistribution
+          ? `Demographics available — ${JSON.stringify(item.demographicDistribution).slice(0, 100)}`
+          : "India, luxury fashion audience (targeting details restricted by Meta)",
+      snapshotUrl: linkUrl,
+      insight: generateInsight(matchedCompetitor, headlineText, bodyText, adType),
+    };
+  });
+}
+
+function generateInsight(
+  competitor: string,
+  headline: string,
+  body: string,
+  adType: string
+): string {
+  const text = `${headline} ${body}`.toLowerCase();
+  if (text.includes("off") || text.includes("discount") || text.includes("sale")) {
+    return `${competitor} is running discount-heavy messaging. Counter with aspirational positioning — don't match discounts on Ajio Luxe.`;
+  }
+  if (text.includes("new") || text.includes("collection") || text.includes("launch")) {
+    return `${competitor} promoting new collection. Ensure Ajio Luxe has the same or newer inventory featured in ads.`;
+  }
+  if (text.includes("free") || text.includes("delivery") || text.includes("shipping")) {
+    return `${competitor} emphasizing free delivery/shipping. Highlight Ajio Luxe's premium packaging and delivery experience.`;
+  }
+  if (adType === "Video" || adType === "Carousel") {
+    return `${competitor} using ${adType.toLowerCase()} format for engagement. Test similar creative formats on Ajio Luxe campaigns.`;
+  }
+  return `${competitor} is active on Meta. Analyze their creative approach and differentiate Ajio Luxe with aspirational luxury messaging.`;
+}
+
+/**
+ * Transform competitor pricing signals into CompetitorAd format
+ * so we can display SERP/pricing intel alongside Meta ads.
+ */
+function transformPricingSignals(signals: any[]): CompetitorAd[] {
+  return signals.map((s) => {
+    const data = s.data || {};
+    const competitor = data.competitor || "Unknown";
+    const product = data.product || s.triggersWhat || "";
+    const theirPrice = data.theirPrice || 0;
+    const ourPrice = data.ourPrice || 0;
+    const discount = data.discount || 0;
+
+    return {
+      competitor,
+      platform: "Google",
+      adType: discount > 0 ? "Shopping" : "Search",
+      headline: s.title || `${competitor} — ${product}`,
+      body: s.description || "",
+      cta: "Visit Site",
+      estimatedSpend: "N/A (SERP intel)",
+      impressions: "N/A (Search)",
+      status: "active",
+      startDate: new Date().toISOString().slice(0, 10),
+      platforms: ["Google Search", "Google Shopping"],
+      targeting: `Keywords: ${(s.suggestedBrands || []).join(", ")} India, ${product}`,
+      snapshotUrl: "",
+      insight: s.suggestedAction || s.description || "",
+    };
+  });
+}
+
+async function fetchCompetitorData() {
+  let ads: CompetitorAd[] = [];
+  let metaStatus = "demo_mode";
+  let googleStatus = "demo_mode";
+
+  try {
+    const pricingSignals = await getCompetitorPricingSignals();
+    if (pricingSignals.length > 0) {
+      ads.push(...transformPricingSignals(pricingSignals));
+      googleStatus = process.env.DATAFORSEO_LOGIN ? "connected" : "fallback_data";
+    }
+  } catch (err) {
+    console.error("[competitors] Pricing signals error:", err);
+  }
+
+  // Meta Ad Library scraping disabled — Apify actor has input format issues.
+  // To enable: connect Meta Marketing API with ads_read permission for direct access.
+  // metaStatus stays "demo_mode" until Meta API is connected.
+
+  return { ads, metaStatus, googleStatus };
+}
+
+registerForPrewarm("competitors", fetchCompetitorData);
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const competitor = searchParams.get("competitor") || "all";
   const platform = searchParams.get("platform") || "all";
+  const forceRefresh = searchParams.get("refresh") === "true";
 
-  let ads = mockCompetitorAds;
+  const { data } = await cachedFetch("competitors", fetchCompetitorData, forceRefresh);
+  let ads = [...data.ads];
 
+  // Filter by query params
   if (competitor !== "all") {
-    ads = ads.filter(a => a.competitor.toLowerCase().includes(competitor.toLowerCase()));
+    ads = ads.filter((a) =>
+      a.competitor.toLowerCase().includes(competitor.toLowerCase())
+    );
   }
   if (platform !== "all") {
-    ads = ads.filter(a => a.platform.toLowerCase() === platform.toLowerCase());
+    ads = ads.filter(
+      (a) => a.platform.toLowerCase() === platform.toLowerCase()
+    );
   }
 
-  const competitors = [...new Set(ads.map(a => a.competitor))];
+  // Summary stats
+  const competitors = [...new Set(ads.map((a) => a.competitor))];
   const totalAds = ads.length;
-  const metaAds = ads.filter(a => a.platform === "Meta").length;
-  const googleAds = ads.filter(a => a.platform === "Google").length;
+  const metaAds = ads.filter((a) => a.platform === "Meta").length;
+  const googleAds = ads.filter((a) => a.platform === "Google").length;
 
   const apiStatus = {
-    metaAdLibrary: process.env.APIFY_API_TOKEN ? "connected" : "demo_mode",
-    googleTransparency: "demo_mode",
+    metaAdLibrary: data.metaStatus,
+    googleTransparency: data.googleStatus,
   };
 
   return NextResponse.json({
@@ -169,8 +239,15 @@ export async function GET(request: Request) {
     },
     apiStatus,
     monitorList: {
-      meta: MONITORED_COMPETITORS.map(c => ({ name: c.name, category: c.category })),
-      google: GOOGLE_MONITORED_COMPETITORS.map(c => ({ name: c.name, domain: c.domain, category: c.category })),
+      meta: MONITORED_COMPETITORS.map((c) => ({
+        name: c.name,
+        category: c.category,
+      })),
+      google: GOOGLE_MONITORED_COMPETITORS.map((c) => ({
+        name: c.name,
+        domain: c.domain,
+        category: c.category,
+      })),
     },
     fetchedAt: new Date().toISOString(),
   });

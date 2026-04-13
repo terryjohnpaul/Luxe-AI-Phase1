@@ -9,9 +9,10 @@ import {
   ChevronDown, ChevronRight,
   ThermometerSun, Umbrella, Trophy,
   Heart, Megaphone, Copy, ExternalLink, Loader2,
-  PartyPopper, Briefcase, TrendingDown, Gift, Monitor,
+  PartyPopper, Briefcase, TrendingDown, Gift, Monitor, Pencil, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useTracking } from "@/lib/tracking/use-tracking";
 
 // ============================================================
 // TYPES (matching API response)
@@ -64,6 +65,16 @@ interface AdRecommendation {
   prediction: {
     confidence: number;
     estimatedReach: string;
+    estimatedImpressions: string;
+    estimatedClicks: string;
+    estimatedCTR: string;
+    estimatedConversions: string;
+    estimatedCPA: string;
+    estimatedRevenue: string;
+    estimatedROAS: string;
+    campaignGoal: string;
+    factors: string[];
+    methodology: string;
   };
   executionGuide: {
     meta: string;
@@ -95,7 +106,6 @@ const SIGNAL_ICONS: Record<string, { icon: React.ElementType; color: string }> =
   ott_release: { icon: Monitor, color: "text-red-500" },
   celebrity: { icon: Star, color: "text-yellow-400" },
   auspicious_day: { icon: Sparkles, color: "text-orange-500" },
-  exam_results: { icon: Gift, color: "text-teal-500" },
   life_event: { icon: Heart, color: "text-red-400" },
   social_trend: { icon: Flame, color: "text-orange-400" },
   travel: { icon: MapPin, color: "text-indigo-400" },
@@ -103,6 +113,15 @@ const SIGNAL_ICONS: Record<string, { icon: React.ElementType; color: string }> =
   inventory: { icon: Package, color: "text-orange-600" },
   competitor: { icon: Target, color: "text-red-500" },
   economic: { icon: DollarSign, color: "text-green-500" },
+  gift_occasion: { icon: Gift, color: "text-pink-400" },
+  sale_event: { icon: ShoppingBag, color: "text-red-600" },
+  occasion_dressing: { icon: Briefcase, color: "text-indigo-500" },
+  fashion_event: { icon: Calendar, color: "text-purple-600" },
+  wedding: { icon: Heart, color: "text-pink-600" },
+  aesthetic: { icon: Sparkles, color: "text-violet-500" },
+  runway: { icon: TrendingUp, color: "text-fuchsia-500" },
+  launch: { icon: Zap, color: "text-amber-600" },
+  category_demand: { icon: BarChart3, color: "text-blue-600" },
 };
 
 function getSignalIcon(type: string) {
@@ -113,9 +132,12 @@ function getSignalTypeLabel(type: string) {
   const labels: Record<string, string> = {
     weather: "Weather", search_trend: "Trend", festival: "Festival", salary_cycle: "Salary/Economic",
     stock_market: "Stock Market", cricket: "Cricket", entertainment: "Entertainment", ott_release: "OTT Release",
-    celebrity: "Celebrity", auspicious_day: "Auspicious Day", exam_results: "Exam Results",
+    celebrity: "Celebrity", auspicious_day: "Auspicious Day",
     life_event: "Life Event", social_trend: "Social Trend", travel: "Travel", regional: "Regional",
     inventory: "Inventory", competitor: "Competitor", economic: "Economic",
+    gift_occasion: "Gift Occasion", sale_event: "Sale Event", occasion_dressing: "Occasion",
+    fashion_event: "Fashion Event", wedding: "Wedding", aesthetic: "Aesthetic",
+    runway: "Runway", launch: "Launch", category_demand: "Category",
   };
   return labels[type] || type;
 }
@@ -153,18 +175,63 @@ export default function CommandCenterPage() {
   const [activeTiers] = useState<string[]>(getActiveTiers);
   const [expandedRec, setExpandedRec] = useState<string | null>(null);
   const [expandedGuide, setExpandedGuide] = useState<string | null>(null);
+  const { trackView, trackExpand, trackCollapse, trackEditStart, trackEditSave, trackApprove, trackSkip, trackCopy, trackGuideOpen } = useTracking();
   const [signalFilter, setSignalFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [approvedRecs, setApprovedRecs] = useState<Set<string>>(new Set());
   const [skippedRecs, setSkippedRecs] = useState<Set<string>>(new Set());
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [editingRec, setEditingRec] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, {
+    budget: string;
+    duration: string;
+    bidStrategy: string;
+    location: string;
+    timing: string;
+    headlines: string[];
+    bodyTexts: string[];
+    cta: string;
+  }>>({});
 
-  const fetchData = async () => {
+  const startEditing = (rec: AdRecommendation) => {
+    trackEditStart(rec.id);
+    setEditingRec(rec.id);
+    if (!editValues[rec.id]) {
+      setEditValues(prev => ({
+        ...prev,
+        [rec.id]: {
+          budget: rec.budget.suggested,
+          duration: rec.budget.duration,
+          bidStrategy: rec.budget.bidStrategy,
+          location: rec.targeting.location,
+          timing: rec.targeting.timing,
+          headlines: [...rec.creative.sampleHeadlines],
+          bodyTexts: [...rec.creative.samplePrimaryTexts],
+          cta: rec.creative.cta,
+        },
+      }));
+    }
+  };
+
+  const updateEditField = (recId: string, field: string, value: string | string[]) => {
+    setEditValues(prev => ({
+      ...prev,
+      [recId]: { ...prev[recId], [field]: value },
+    }));
+  };
+
+  const saveEdits = (recId: string) => {
+    trackEditSave(recId, editValues[recId] || {});
+    setEditingRec(null);
+  };
+
+  const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     try {
       const tiers = getActiveTiers().join(",");
-      const resp = await fetch(`/api/signals/live?mode=full&tiers=${tiers}`);
+      const refresh = forceRefresh ? "&refresh=true" : "";
+      const resp = await fetch(`/api/signals/live?mode=full&tiers=${tiers}${refresh}`);
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
       const json = await resp.json();
       setData(json);
@@ -220,7 +287,7 @@ export default function CommandCenterPage() {
           <AlertTriangle size={32} className="text-brand-red mx-auto mb-4" />
           <h2 className="font-semibold text-lg mb-2">Failed to load signals</h2>
           <p className="text-sm text-muted mb-4">{error}</p>
-          <button onClick={fetchData} className="btn-primary"><RefreshCw size={14} /> Retry</button>
+          <button onClick={() => fetchData(true)} className="btn-primary"><RefreshCw size={14} /> Retry</button>
         </div>
       </div>
     );
@@ -256,7 +323,7 @@ export default function CommandCenterPage() {
           <span className="text-xs text-muted flex items-center gap-1">
             <Clock size={12} /> Fetched {new Date(data.fetchedAt).toLocaleTimeString()}
           </span>
-          <button onClick={fetchData} className="btn-secondary"><RefreshCw size={14} /> Refresh</button>
+          <button onClick={() => fetchData(true)} className="btn-secondary"><RefreshCw size={14} /> Refresh</button>
         </div>
       </div>
 
@@ -378,41 +445,195 @@ export default function CommandCenterPage() {
                         <p className="text-xs text-muted mt-1">{rec.description.slice(0, 150)}</p>
 
                         <div className="flex items-center gap-4 mt-3 flex-wrap">
-                          <span className="text-xs"><span className="text-muted">Budget: </span><span className="font-semibold">{rec.budget.suggested}</span></span>
-                          <span className="text-xs"><span className="text-muted">Duration: </span><span className="font-semibold">{rec.budget.duration}</span></span>
-                          <span className="text-xs"><span className="text-muted">Reach: </span><span className="font-semibold">{rec.prediction.estimatedReach}</span></span>
-                          <span className="text-xs"><span className="text-muted">Confidence: </span><span className="font-semibold">{rec.prediction.confidence}%</span></span>
+                          <span className="text-xs"><span className="text-muted">Budget: </span><span className="font-semibold">{editValues[rec.id]?.budget || rec.budget.suggested}</span></span>
+                          <span className="text-xs"><span className="text-muted">Duration: </span><span className="font-semibold">{editValues[rec.id]?.duration || rec.budget.duration}</span></span>
+                          {editValues[rec.id] && <span className="text-[10px] text-brand-blue font-medium">(Customized)</span>}
+                        </div>
+
+                        {/* Predicted Outcomes */}
+                        <div className="mt-2 py-2.5 px-3 bg-surface/60 rounded-lg">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <span className="text-[10px] font-semibold text-muted uppercase tracking-wide mr-1">Predicted Outcome:</span>
+                            <span className={cn("text-[9px] px-1.5 py-0.5 rounded-full font-medium",
+                              rec.prediction.campaignGoal === "Brand Awareness" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"
+                            )}>{rec.prediction.campaignGoal}</span>
+                            <span className="text-xs flex items-center gap-1"><Users size={11} className="text-blue-500" /><span className="text-muted">Reach</span> <span className="font-semibold">{rec.prediction.estimatedReach}</span></span>
+                            <span className="text-gray-300">|</span>
+                            <span className="text-xs flex items-center gap-1"><Target size={11} className="text-orange-500" /><span className="text-muted">Clicks</span> <span className="font-semibold">{rec.prediction.estimatedClicks}</span></span>
+                            <span className="text-gray-300">|</span>
+                            <span className="text-xs flex items-center gap-1"><ShoppingBag size={11} className="text-emerald-500" /><span className="text-muted">Conv.</span> <span className="font-semibold">{rec.prediction.estimatedConversions}</span></span>
+                            <span className="text-gray-300">|</span>
+                            <span className="text-xs flex items-center gap-1"><DollarSign size={11} className="text-amber-500" /><span className="text-muted">CPA</span> <span className="font-semibold">{rec.prediction.estimatedCPA}</span></span>
+                            <span className="text-gray-300">|</span>
+                            <span className="text-xs flex items-center gap-1"><TrendingUp size={11} className="text-green-600" /><span className="text-muted">Revenue</span> <span className="font-semibold">{rec.prediction.estimatedRevenue}</span></span>
+                            <span className="text-gray-300">|</span>
+                            <span className="text-xs flex items-center gap-1"><BarChart3 size={11} className="text-green-600" /><span className="text-muted">ROAS</span> <span className={cn("font-semibold", parseFloat(rec.prediction.estimatedROAS) >= 2 ? "text-green-600" : parseFloat(rec.prediction.estimatedROAS) >= 1 ? "text-amber-600" : "text-red-500")}>{rec.prediction.estimatedROAS}</span></span>
+                          </div>
+                          {/* Why we predict this */}
+                          <div className="mt-2 pt-2 border-t border-card-border/50">
+                            <div className="flex items-start gap-1.5">
+                              <Info size={11} className="text-blue-400 mt-0.5 shrink-0" />
+                              <div>
+                                <span className="text-[10px] font-medium text-blue-500">Why this prediction: </span>
+                                <span className="text-[10px] text-muted">{rec.prediction.factors.join(" · ")}</span>
+                              </div>
+                            </div>
+                            <p className="text-[9px] text-muted/60 mt-1 ml-4">{rec.prediction.methodology}</p>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {!isApproved && !isSkipped && (
-                          <>
-                            <button onClick={() => setApprovedRecs(prev => new Set(prev).add(rec.id))} className="btn-approve flex items-center gap-1">
-                              <Check size={14} /> Run This
-                            </button>
-                            <button onClick={() => setSkippedRecs(prev => new Set(prev).add(rec.id))} className="btn-secondary text-xs">Skip</button>
-                          </>
-                        )}
-                        {isApproved && <span className="text-xs text-brand-green font-semibold flex items-center gap-1"><Check size={14} /> Approved</span>}
-                        {isSkipped && <span className="text-xs text-muted flex items-center gap-1"><X size={14} /> Skipped</span>}
+                      <div className="flex items-center gap-3 shrink-0">
+                        {/* Success Probability Ring */}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div className="relative w-12 h-12">
+                            <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+                              <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100" />
+                              <circle cx="24" cy="24" r="20" fill="none" strokeWidth="3"
+                                strokeDasharray={`${(rec.prediction.confidence / 100) * 125.6} 125.6`}
+                                strokeLinecap="round"
+                                className={cn(
+                                  rec.prediction.confidence >= 80 ? "text-emerald-500" :
+                                  rec.prediction.confidence >= 60 ? "text-blue-500" :
+                                  rec.prediction.confidence >= 40 ? "text-amber-500" : "text-red-400"
+                                )} />
+                            </svg>
+                            <span className={cn("absolute inset-0 flex items-center justify-center text-xs font-bold",
+                              rec.prediction.confidence >= 80 ? "text-emerald-600" :
+                              rec.prediction.confidence >= 60 ? "text-blue-600" :
+                              rec.prediction.confidence >= 40 ? "text-amber-600" : "text-red-500"
+                            )}>
+                              {rec.prediction.confidence}%
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-muted font-medium">Success</span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {!isApproved && !isSkipped && (
+                            <>
+                              <button onClick={() => startEditing(rec)} className="btn-secondary text-xs flex items-center gap-1">
+                                <Pencil size={12} /> Edit Campaign
+                              </button>
+                              <button onClick={() => { trackApprove(rec.id, !!editValues[rec.id]); setApprovedRecs(prev => new Set(prev).add(rec.id)); }} className="btn-approve flex items-center gap-1">
+                                <Check size={14} /> Run This
+                              </button>
+                              <button onClick={() => { trackSkip(rec.id); setSkippedRecs(prev => new Set(prev).add(rec.id)); }} className="btn-secondary text-xs">Skip</button>
+                            </>
+                          )}
+                          {isApproved && <span className="text-xs text-brand-green font-semibold flex items-center gap-1"><Check size={14} /> Approved</span>}
+                          {isSkipped && <span className="text-xs text-muted flex items-center gap-1"><X size={14} /> Skipped</span>}
+                        </div>
                       </div>
                     </div>
 
                     {/* Expand toggles */}
                     <div className="flex gap-4 mt-3">
-                      <button onClick={() => setExpandedRec(isExpanded ? null : rec.id)}
+                      <button onClick={() => { isExpanded ? trackCollapse(rec.id) : trackExpand(rec.id); setExpandedRec(isExpanded ? null : rec.id); }}
                         className="flex items-center gap-1 text-xs text-brand-blue hover:underline">
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                         {isExpanded ? "Hide ad plan" : "See full ad plan (creative, targeting, budget)"}
                       </button>
-                      <button onClick={() => setExpandedGuide(isGuideOpen ? null : rec.id)}
+                      <button onClick={() => { if (!isGuideOpen) trackGuideOpen(rec.id); setExpandedGuide(isGuideOpen ? null : rec.id); }}
                         className="flex items-center gap-1 text-xs text-brand-purple hover:underline">
                         <ExternalLink size={12} />
                         {isGuideOpen ? "Hide setup guide" : "How to set this up in Meta & Google"}
                       </button>
                     </div>
                   </div>
+
+                  {/* Editing Panel */}
+                  {editingRec === rec.id && editValues[rec.id] && (
+                    <div className="border-t border-card-border bg-surface/50 p-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-semibold flex items-center gap-1.5">
+                          <Pencil size={12} className="text-brand-blue" /> CUSTOMIZE CAMPAIGN
+                        </h4>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setEditingRec(null)} className="text-xs text-muted hover:text-text-primary">Cancel</button>
+                          <button onClick={() => saveEdits(rec.id)} className="btn-approve flex items-center gap-1 text-xs">
+                            <Check size={12} /> Save Changes
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div>
+                          <label className="text-[10px] font-medium text-muted block mb-1">BUDGET</label>
+                          <input type="text" value={editValues[rec.id].budget}
+                            onChange={e => updateEditField(rec.id, "budget", e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted block mb-1">DURATION</label>
+                          <input type="text" value={editValues[rec.id].duration}
+                            onChange={e => updateEditField(rec.id, "duration", e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted block mb-1">BID STRATEGY</label>
+                          <input type="text" value={editValues[rec.id].bidStrategy}
+                            onChange={e => updateEditField(rec.id, "bidStrategy", e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="text-[10px] font-medium text-muted block mb-1">TARGET LOCATION</label>
+                          <input type="text" value={editValues[rec.id].location}
+                            onChange={e => updateEditField(rec.id, "location", e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-muted block mb-1">TIMING</label>
+                          <input type="text" value={editValues[rec.id].timing}
+                            onChange={e => updateEditField(rec.id, "timing", e.target.value)}
+                            className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue" />
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="text-[10px] font-medium text-muted block mb-1">HEADLINES</label>
+                        <div className="space-y-1.5">
+                          {editValues[rec.id].headlines.map((h, i) => (
+                            <input key={i} type="text" value={h}
+                              onChange={e => {
+                                const updated = [...editValues[rec.id].headlines];
+                                updated[i] = e.target.value;
+                                updateEditField(rec.id, "headlines", updated);
+                              }}
+                              placeholder={`Headline ${i + 1}`}
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue" />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="text-[10px] font-medium text-muted block mb-1">BODY TEXT</label>
+                        <div className="space-y-1.5">
+                          {editValues[rec.id].bodyTexts.map((t, i) => (
+                            <textarea key={i} value={t}
+                              onChange={e => {
+                                const updated = [...editValues[rec.id].bodyTexts];
+                                updated[i] = e.target.value;
+                                updateEditField(rec.id, "bodyTexts", updated);
+                              }}
+                              rows={2}
+                              placeholder={`Body text ${i + 1}`}
+                              className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue resize-none" />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="w-48">
+                        <label className="text-[10px] font-medium text-muted block mb-1">CTA BUTTON</label>
+                        <input type="text" value={editValues[rec.id].cta}
+                          onChange={e => updateEditField(rec.id, "cta", e.target.value)}
+                          className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-card-border bg-white focus:outline-none focus:ring-1 focus:ring-brand-blue" />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Expanded: Ad Plan */}
                   {isExpanded && (

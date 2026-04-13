@@ -15,8 +15,10 @@ import { getStockMarketSignals } from "./stock-market";
 import { getCricketSignals } from "./cricket";
 import { getEntertainmentSignals } from "./entertainment";
 import { getAuspiciousDaySignals } from "./auspicious-days";
-import { getExamResultSignals } from "./exam-results";
 import { getNewsCelebritySignals } from "./news-celebrity";
+import { getGiftOccasionSignals } from "./gift-occasions";
+import { getSaleEventSignals } from "./sale-events";
+import { getOccasionDressingSignals } from "./occasion-dressing";
 import { getWeatherSignals } from "./weather-realtime";
 import { getTravelEventSignals } from "./travel-events";
 import { getCelebritySignals } from "./celebrity-moments";
@@ -25,6 +27,13 @@ import { getLystSignals } from "./lyst-trending";
 import { getCompetitorPricingSignals } from "./competitor-pricing";
 import { getInstagramHashtagSignals } from "./instagram-hashtags";
 import { getSmartRecommendationSignals } from "./smart-recommendations";
+import { getFashionEventSignals } from "./fashion-events";
+import { getWeddingIntensitySignals } from "./wedding-intensity";
+import { getLuxuryCategorySignals } from "./luxury-category-demand";
+import { getAestheticTrendSignals } from "./aesthetic-trends";
+import { getRunwayPipelineSignals } from "./runway-pipeline";
+import { getLuxuryLaunchSignals } from "./luxury-launches";
+import { getEconomicSentimentSignals } from "./economic-sentiment";
 
 // Severity ranking for sorting
 const SEVERITY_RANK: Record<string, number> = {
@@ -40,39 +49,49 @@ const SEVERITY_RANK: Record<string, number> = {
  */
 export async function getAllSignals(): Promise<Signal[]> {
   const results = await Promise.allSettled([
-    // FREE — date-based (always work, no API needed)
+    // Calendar-based (always work, no API needed)
     Promise.resolve(getFestivalSignals()),
     Promise.resolve(getSalaryCycleSignals()),
     Promise.resolve(getAuspiciousDaySignals()),
-    Promise.resolve(getExamResultSignals()),
     Promise.resolve(getTravelEventSignals()),
-    Promise.resolve(getCelebritySignals()),
+    Promise.resolve(getGiftOccasionSignals()),     // NEW: gift occasions (Valentine's, Rakhi, Diwali gifting)
+    Promise.resolve(getSaleEventSignals()),          // NEW: Ajio Luxe sale events (EOSS, brand sales)
+    getCelebritySignals(),                           // async — tries NewsAPI, falls back to curated
 
-    // FREE — API-based (need API keys, graceful fallback)
+    // API-based signals
     getWeatherSignals(),
-    getStockMarketSignals(),
-    getCricketSignals(),
-    getEntertainmentSignals(),
-    getNewsCelebritySignals(),
+    getCricketSignals(),                             // filtered: IPL + India matches only
+    // getNewsCelebritySignals() — REMOVED: duplicates getCelebritySignals() above (both use NewsAPI)
 
-    // Trend & Competitive Intelligence (mock data, production: APIs/scraping)
-    Promise.resolve(getPinterestSignals()),
-    Promise.resolve(getLystSignals()),
-    Promise.resolve(getCompetitorPricingSignals()),
-    Promise.resolve(getInstagramHashtagSignals()),
+    // Trend & Competitive Intelligence (Apify + DataForSEO)
+    getPinterestSignals(),
+    getLystSignals(),
+    getCompetitorPricingSignals(),
+    getInstagramHashtagSignals(),
+    getOccasionDressingSignals(),                    // NEW: occasion dressing (interview, date, party, vacation)
 
-    // Smart Recommendations (city targeting, budget optimizer, creative fatigue, event stacking)
+    // Smart Recommendations (city targeting)
     Promise.resolve(getSmartRecommendationSignals()),
+
+    // NEW: Luxury F&L industry-wide signals
+    Promise.resolve(getFashionEventSignals()),
+    Promise.resolve(getWeddingIntensitySignals()),
+    getLuxuryCategorySignals(),                          // async — uses Apify (24h cache)
+    Promise.resolve(getAestheticTrendSignals()),
+    Promise.resolve(getRunwayPipelineSignals()),
+    Promise.resolve(getLuxuryLaunchSignals()),
+    Promise.resolve(getEconomicSentimentSignals()),
   ]);
 
   const allSignals: Signal[] = [];
   const sourceStatus: Record<string, string> = {};
 
   const sourceNames = [
-    "festivals", "salary-cycle", "auspicious-days", "exam-results", "travel-events", "celebrity-moments",
-    "weather", "stock-market", "cricket", "entertainment", "news-celebrity",
-    "pinterest-trends", "lyst-trending", "competitor-pricing", "instagram-hashtags",
+    "festivals", "salary-cycle", "auspicious-days", "travel-events", "gift-occasions", "sale-events", "celebrity-moments",
+    "weather", "cricket",
+    "pinterest-trends", "lyst-trending", "competitor-pricing", "instagram-hashtags", "occasion-dressing",
     "smart-recommendations",
+    "fashion-events", "wedding-intensity", "category-demand", "aesthetic-trends", "runway-pipeline", "luxury-launches", "economic-sentiment",
   ];
 
   results.forEach((result, index) => {
@@ -141,19 +160,25 @@ export function getSignalSourceStatus(): Record<string, { enabled: boolean; need
     festivals: { enabled: true, needsKey: false, keyName: "" },
     "salary-cycle": { enabled: true, needsKey: false, keyName: "" },
     "auspicious-days": { enabled: true, needsKey: false, keyName: "" },
-    "exam-results": { enabled: true, needsKey: false, keyName: "" },
     "travel-events": { enabled: true, needsKey: false, keyName: "" },
+    "gift-occasions": { enabled: true, needsKey: false, keyName: "" },
+    "sale-events": { enabled: true, needsKey: false, keyName: "" },
     "celebrity-moments": { enabled: true, needsKey: false, keyName: "" },
     weather: { enabled: !!process.env.WEATHER_API_KEY, needsKey: true, keyName: "WEATHER_API_KEY" },
-    "stock-market": { enabled: true, needsKey: false, keyName: "" },
-    cricket: { enabled: true, needsKey: false, keyName: "" },
-    entertainment: { enabled: true, needsKey: false, keyName: "" },
-    "news-celebrity": { enabled: !!process.env.NEWS_API_KEY, needsKey: true, keyName: "NEWS_API_KEY" },
-    "pinterest-trends": { enabled: true, needsKey: false, keyName: "" }, // Mock data, production: Pinterest API
-    "lyst-trending": { enabled: true, needsKey: false, keyName: "" }, // Mock data, production: Lyst scraping
-    "competitor-pricing": { enabled: true, needsKey: false, keyName: "" }, // Mock data, production: price scraper
-    "instagram-hashtags": { enabled: true, needsKey: false, keyName: "" }, // Mock data, production: Instagram API
-    "smart-recommendations": { enabled: true, needsKey: false, keyName: "" }, // City targeting, budget optimizer, creative fatigue, event stacking
+    cricket: { enabled: !!process.env.CRICKET_API_KEY, needsKey: true, keyName: "CRICKET_API_KEY" },
+    "pinterest-trends": { enabled: !!process.env.APIFY_API_TOKEN, needsKey: true, keyName: "APIFY_API_TOKEN" },
+    "lyst-trending": { enabled: !!process.env.DATAFORSEO_LOGIN, needsKey: true, keyName: "DATAFORSEO_LOGIN" },
+    "competitor-pricing": { enabled: !!process.env.DATAFORSEO_LOGIN, needsKey: true, keyName: "DATAFORSEO_LOGIN" },
+    "instagram-hashtags": { enabled: !!process.env.APIFY_API_TOKEN, needsKey: true, keyName: "APIFY_API_TOKEN" },
+    "occasion-dressing": { enabled: true, needsKey: false, keyName: "" },
+    "smart-recommendations": { enabled: true, needsKey: false, keyName: "" },
+    "fashion-events": { enabled: true, needsKey: false, keyName: "" },
+    "wedding-intensity": { enabled: true, needsKey: false, keyName: "" },
+    "category-demand": { enabled: true, needsKey: false, keyName: "" },
+    "aesthetic-trends": { enabled: true, needsKey: false, keyName: "" },
+    "runway-pipeline": { enabled: true, needsKey: false, keyName: "" },
+    "luxury-launches": { enabled: true, needsKey: false, keyName: "" },
+    "economic-sentiment": { enabled: true, needsKey: false, keyName: "" },
   };
 }
 

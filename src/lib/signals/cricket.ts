@@ -114,12 +114,17 @@ export async function getCricketSignals(): Promise<Signal[]> {
     });
   }
 
-  // === TODAY'S MATCH ===
+  // === TODAY'S MATCH (only IPL + India international) ===
   const matches = await fetchUpcomingMatches();
   for (const match of matches) {
+    // Filter: only show IPL teams or India international matches
+    const team1Info = IPL_TEAMS[match.team1];
+    const team2Info = IPL_TEAMS[match.team2];
+    const isIPL = team1Info || team2Info;
+    const isIndiaMatch = match.team1.includes("India") || match.team2.includes("India");
+    if (!isIPL && !isIndiaMatch) continue; // Skip irrelevant matches (Lesotho, Botswana, etc.)
+
     if (match.status === "upcoming" || match.status === "live") {
-      const team1Info = IPL_TEAMS[match.team1];
-      const team2Info = IPL_TEAMS[match.team2];
       const cities = [team1Info?.city, team2Info?.city].filter(Boolean);
       const fanBases = [team1Info?.fanBase, team2Info?.fanBase].filter(Boolean);
 

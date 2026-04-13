@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
-import { getCompetitorPriceChanges } from "@/lib/signals/competitor-pricing";
+import { getCompetitorPriceChanges, fetchLiveCompetitorIntel } from "@/lib/signals/competitor-pricing";
+import { cachedFetch, registerForPrewarm } from "@/lib/api-cache";
 
-export async function GET() {
-  const priceChanges = getCompetitorPriceChanges();
+async function fetchPriceData() {
+  let priceChanges = await fetchLiveCompetitorIntel();
+  if (priceChanges.length === 0) priceChanges = getCompetitorPriceChanges();
+  return priceChanges;
+}
+
+registerForPrewarm("price-intel", fetchPriceData);
+
+export async function GET(request: Request) {
+  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "true";
+  const { data: priceChanges } = await cachedFetch("price-intel", fetchPriceData, forceRefresh);
 
   const totalMonitored = priceChanges.length;
   const weAreCheaper = priceChanges.filter(c => c.priceAdvantage === "we_are_cheaper").length;

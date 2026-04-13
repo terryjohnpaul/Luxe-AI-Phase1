@@ -29,16 +29,36 @@ export interface GoogleCompetitorProfile {
 }
 
 export const GOOGLE_MONITORED_COMPETITORS: GoogleCompetitorProfile[] = [
+  // Indian luxury e-commerce platforms
   { name: "Tata CLiQ Luxury", domain: "tatacliq.com", category: "direct_competitor" },
   { name: "Myntra", domain: "myntra.com", category: "direct_competitor" },
-  { name: "Ajio (parent)", domain: "ajio.com", category: "adjacent" },
-  { name: "Nykaa Fashion", domain: "nykaafashion.com", category: "adjacent" },
+  { name: "Ajio Luxe", domain: "ajio.com", category: "direct_competitor" },
+  { name: "Nykaa Fashion", domain: "nykaafashion.com", category: "direct_competitor" },
+  { name: "Pernia's Pop-Up Shop", domain: "perniaspopupshop.com", category: "direct_competitor" },
+  { name: "Aza Fashions", domain: "azafashions.com", category: "direct_competitor" },
+  { name: "Darveys", domain: "darveys.com", category: "direct_competitor" },
+
+  // International luxury platforms (India delivery)
+  { name: "Farfetch", domain: "farfetch.com", category: "adjacent" },
+  { name: "Net-a-Porter", domain: "net-a-porter.com", category: "adjacent" },
+  { name: "SSENSE", domain: "ssense.com", category: "adjacent" },
+  { name: "Mytheresa", domain: "mytheresa.com", category: "adjacent" },
+
+  // Luxury brand D2C in India
+  { name: "Louis Vuitton", domain: "louisvuitton.com", category: "brand_direct" },
+  { name: "Gucci", domain: "gucci.com", category: "brand_direct" },
+  { name: "Dior", domain: "dior.com", category: "brand_direct" },
+  { name: "Burberry", domain: "burberry.com", category: "brand_direct" },
+  { name: "Prada", domain: "prada.com", category: "brand_direct" },
   { name: "Hugo Boss", domain: "hugoboss.com", category: "brand_direct" },
   { name: "Coach", domain: "coach.com", category: "brand_direct" },
   { name: "Michael Kors", domain: "michaelkors.com", category: "brand_direct" },
-  { name: "Diesel", domain: "diesel.com", category: "brand_direct" },
+  { name: "Ralph Lauren", domain: "ralphlauren.com", category: "brand_direct" },
   { name: "Versace", domain: "versace.com", category: "brand_direct" },
   { name: "Jimmy Choo", domain: "jimmychoo.com", category: "brand_direct" },
+  { name: "Diesel", domain: "diesel.com", category: "brand_direct" },
+  { name: "Emporio Armani", domain: "armani.com", category: "brand_direct" },
+  { name: "Balenciaga", domain: "balenciaga.com", category: "brand_direct" },
 ];
 
 export class GoogleAdTransparencyClient {

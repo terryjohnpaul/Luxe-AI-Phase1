@@ -4,53 +4,35 @@ import { useState, useEffect } from "react";
 import {
   TrendingUp, Hash, ShoppingBag, Flame, Copy, Filter,
   Loader2, BarChart3, Eye, MessageCircle, CheckCircle,
-  Sparkles, Tag, Users, ArrowUpRight,
+  Sparkles, Tag, Users, ArrowUpRight, AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
-// --- Types ---
+// --- Types matching the API Signal shape ---
 
-interface PinterestTrend {
-  keyword: string;
-  category: string;
-  growthPercent: number;
-  weeklyPins: string;
-  relatedBrands: string[];
-  trendDirection: "rising" | "stable" | "viral";
-  adOpportunity: string;
-}
-
-interface InstagramTrend {
-  hashtag: string;
-  category: string;
-  weeklyPosts: string;
-  growthPercent: number;
-  topBrands: string[];
-  aesthetic: string;
-  adAngle: string;
-  targetAudience: string;
-}
-
-interface LystProduct {
-  rank: number;
-  product: string;
-  brand: string;
-  category: string;
-  searchGrowth: number;
-  socialMentions: string;
-  pageViews: string;
-  availableOnAjioLuxe: boolean;
-  adOpportunity: string;
+interface Signal {
+  id: string;
+  type: string;
+  source: string;
+  title: string;
+  description: string;
+  location: string;
+  severity: "critical" | "high" | "medium" | "low";
+  triggersWhat: string;
+  targetArchetypes: string[];
+  suggestedBrands: string[];
+  suggestedAction: string;
+  confidence: number;
+  data: Record<string, any>;
 }
 
 interface ApiResponse {
-  pinterest: PinterestTrend[];
-  instagram: InstagramTrend[];
-  lyst: LystProduct[];
+  pinterest: Signal[];
+  instagram: Signal[];
+  lyst: Signal[];
   summary: {
     totalTrends: number;
     viralCount: number;
-    topCategories: { name: string; count: number }[];
     topBrands: { name: string; count: number }[];
   };
   fetchedAt: string;
@@ -74,12 +56,28 @@ function getGrowthColor(pct: number) {
   return "text-green-600";
 }
 
+function getDirection(growth: number): "viral" | "rising" | "stable" {
+  if (growth >= 200) return "viral";
+  if (growth >= 50) return "rising";
+  return "stable";
+}
+
 function getAllBrands(data: ApiResponse): string[] {
   const set = new Set<string>();
-  data.pinterest.forEach(t => t.relatedBrands.forEach(b => set.add(b)));
-  data.instagram.forEach(t => t.topBrands.forEach(b => set.add(b)));
-  data.lyst.forEach(p => set.add(p.brand));
+  data.pinterest.forEach(s => s.suggestedBrands.forEach(b => set.add(b)));
+  data.instagram.forEach(s => s.suggestedBrands.forEach(b => set.add(b)));
+  data.lyst.forEach(s => s.suggestedBrands.forEach(b => set.add(b)));
   return Array.from(set).sort();
+}
+
+function getTopCategory(data: ApiResponse): string {
+  const counts: Record<string, number> = {};
+  [...data.pinterest, ...data.instagram, ...data.lyst].forEach(s => {
+    const cat = s.triggersWhat || "Unknown";
+    counts[cat] = (counts[cat] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  return sorted[0]?.[0] ?? "N/A";
 }
 
 // --- Component ---
@@ -87,15 +85,19 @@ function getAllBrands(data: ApiResponse): string[] {
 export default function TrendIntelPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("pinterest");
   const [filterBrand, setFilterBrand] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/trend-intel")
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`API returned ${r.status}`);
+        return r.json();
+      })
       .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(e => { setError(e.message); setLoading(false); });
   }, []);
 
   const copyText = (text: string, id: string) => {
@@ -116,18 +118,31 @@ export default function TrendIntelPage() {
     );
   }
 
+  // Error
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <AlertCircle size={32} className="text-red-500 mx-auto mb-4" />
+          <p className="text-sm text-red-600 font-medium mb-1">Failed to load trend intelligence</p>
+          <p className="text-xs text-muted">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) return null;
 
   const allBrands = getAllBrands(data);
-  const topCategory = data.summary.topCategories[0]?.name ?? "N/A";
+  const topCategory = getTopCategory(data);
 
   // Filter helpers
   const matchesBrand = (brands: string[]) =>
     filterBrand === "all" || brands.includes(filterBrand);
 
-  const filteredPinterest = data.pinterest.filter(t => matchesBrand(t.relatedBrands));
-  const filteredInstagram = data.instagram.filter(t => matchesBrand(t.topBrands));
-  const filteredLyst = data.lyst.filter(p => matchesBrand([p.brand]));
+  const filteredPinterest = data.pinterest.filter(s => matchesBrand(s.suggestedBrands));
+  const filteredInstagram = data.instagram.filter(s => matchesBrand(s.suggestedBrands));
+  const filteredLyst = data.lyst.filter(s => matchesBrand(s.suggestedBrands));
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; count: number }[] = [
     { key: "pinterest", label: "Pinterest", icon: <TrendingUp size={14} />, count: filteredPinterest.length },
@@ -234,65 +249,75 @@ export default function TrendIntelPage() {
             {filteredPinterest.length === 0 && (
               <EmptyState icon={TrendingUp} message="No Pinterest trends match the current filter." />
             )}
-            {filteredPinterest.map((trend, i) => (
-              <div key={`pin-${i}`} className="glass-card p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    {/* Badges */}
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="flex items-center gap-1 text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
-                        <TrendingUp size={10} /> Pinterest
-                      </span>
-                      <span className="text-xs bg-surface text-muted px-2 py-0.5 rounded">{trend.category}</span>
-                      <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium capitalize", getDirectionBadge(trend.trendDirection))}>
-                        {trend.trendDirection === "viral" && <Flame size={9} className="inline mr-0.5" />}
-                        {trend.trendDirection}
-                      </span>
-                    </div>
+            {filteredPinterest.map((signal, i) => {
+              const keyword = signal.data.keyword || signal.title;
+              const growth = signal.data.growth || 0;
+              const weeklyPins = signal.data.weeklyPins || "N/A";
+              const direction = signal.data.direction || getDirection(growth);
+              const category = signal.triggersWhat;
+              const brands = signal.suggestedBrands;
+              const adOpportunity = signal.suggestedAction;
 
-                    {/* Keyword */}
-                    <h3 className="font-semibold text-sm mb-1">&ldquo;{trend.keyword}&rdquo;</h3>
-
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 mt-2 flex-wrap">
-                      <span className="text-xs flex items-center gap-1">
-                        <ArrowUpRight size={12} className={getGrowthColor(trend.growthPercent)} />
-                        <span className="text-muted">Growth:</span>
-                        <span className={cn("font-bold", getGrowthColor(trend.growthPercent))}>+{trend.growthPercent}%</span>
-                      </span>
-                      <span className="text-xs flex items-center gap-1">
-                        <BarChart3 size={12} className="text-blue-500" />
-                        <span className="text-muted">Weekly Pins:</span>
-                        <span className="font-medium">{trend.weeklyPins}</span>
-                      </span>
-                    </div>
-
-                    {/* Brands */}
-                    <div className="flex flex-wrap gap-1 mt-3">
-                      {trend.relatedBrands.map(b => (
-                        <span key={b} className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200">
-                          {b}
+              return (
+                <div key={signal.id} className="glass-card p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      {/* Badges */}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="flex items-center gap-1 text-xs font-semibold bg-red-50 text-red-700 px-2 py-0.5 rounded-full border border-red-200">
+                          <TrendingUp size={10} /> Pinterest
                         </span>
-                      ))}
+                        <span className="text-xs bg-surface text-muted px-2 py-0.5 rounded">{category}</span>
+                        <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-medium capitalize", getDirectionBadge(direction))}>
+                          {direction === "viral" && <Flame size={9} className="inline mr-0.5" />}
+                          {direction}
+                        </span>
+                      </div>
+
+                      {/* Keyword */}
+                      <h3 className="font-semibold text-sm mb-1">&ldquo;{keyword}&rdquo;</h3>
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 mt-2 flex-wrap">
+                        <span className="text-xs flex items-center gap-1">
+                          <ArrowUpRight size={12} className={getGrowthColor(growth)} />
+                          <span className="text-muted">Growth:</span>
+                          <span className={cn("font-bold", getGrowthColor(growth))}>+{growth}%</span>
+                        </span>
+                        <span className="text-xs flex items-center gap-1">
+                          <BarChart3 size={12} className="text-blue-500" />
+                          <span className="text-muted">Weekly Pins:</span>
+                          <span className="font-medium">{weeklyPins}</span>
+                        </span>
+                      </div>
+
+                      {/* Brands */}
+                      <div className="flex flex-wrap gap-1 mt-3">
+                        {brands.map(b => (
+                          <span key={b} className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200">
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Ad Opportunity */}
+                      <div className="mt-3 p-3 bg-amber-50/60 rounded-lg border border-amber-200">
+                        <p className="text-[10px] font-medium text-amber-700 uppercase tracking-wide mb-1">Ad Opportunity</p>
+                        <p className="text-xs text-text-secondary">{adOpportunity}</p>
+                      </div>
                     </div>
 
-                    {/* Ad Opportunity */}
-                    <div className="mt-3 p-3 bg-amber-50/60 rounded-lg border border-amber-200">
-                      <p className="text-[10px] font-medium text-amber-700 uppercase tracking-wide mb-1">Ad Opportunity</p>
-                      <p className="text-xs text-text-secondary">{trend.adOpportunity}</p>
-                    </div>
+                    {/* Copy Button */}
+                    <button
+                      onClick={() => copyText(adOpportunity, signal.id)}
+                      className="btn-secondary text-xs shrink-0"
+                    >
+                      <Copy size={12} /> {copiedId === signal.id ? "Copied!" : "Copy Ad Brief"}
+                    </button>
                   </div>
-
-                  {/* Copy Button */}
-                  <button
-                    onClick={() => copyText(trend.adOpportunity, `pin-${i}`)}
-                    className="btn-secondary text-xs shrink-0"
-                  >
-                    <Copy size={12} /> {copiedId === `pin-${i}` ? "Copied!" : "Copy Ad Brief"}
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </>
         )}
 
@@ -302,77 +327,88 @@ export default function TrendIntelPage() {
             {filteredInstagram.length === 0 && (
               <EmptyState icon={Hash} message="No Instagram hashtags match the current filter." />
             )}
-            {filteredInstagram.map((trend, i) => (
-              <div key={`ig-${i}`} className="glass-card p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    {/* Badges */}
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="flex items-center gap-1 text-xs font-semibold bg-pink-50 text-pink-700 px-2 py-0.5 rounded-full border border-pink-200">
-                        <Hash size={10} /> Instagram
-                      </span>
-                      <span className="text-xs bg-surface text-muted px-2 py-0.5 rounded">{trend.category}</span>
-                      {trend.growthPercent >= 300 && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 border border-red-200">
-                          <Flame size={9} className="inline mr-0.5" />viral
+            {filteredInstagram.map((signal, i) => {
+              const hashtag = signal.data.hashtag || signal.title;
+              const growth = signal.data.growth || 0;
+              const weeklyPosts = signal.data.weeklyPosts || "N/A";
+              const aesthetic = signal.data.aesthetic || "";
+              const audience = signal.data.audience || "";
+              const category = signal.triggersWhat;
+              const brands = signal.suggestedBrands;
+              const adAngle = signal.suggestedAction;
+
+              return (
+                <div key={signal.id} className="glass-card p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      {/* Badges */}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="flex items-center gap-1 text-xs font-semibold bg-pink-50 text-pink-700 px-2 py-0.5 rounded-full border border-pink-200">
+                          <Hash size={10} /> Instagram
                         </span>
-                      )}
-                      {trend.growthPercent >= 150 && trend.growthPercent < 300 && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200">
-                          rising
+                        <span className="text-xs bg-surface text-muted px-2 py-0.5 rounded">{category}</span>
+                        {growth >= 300 && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 border border-red-200">
+                            <Flame size={9} className="inline mr-0.5" />viral
+                          </span>
+                        )}
+                        {growth >= 150 && growth < 300 && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200">
+                            rising
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Hashtag */}
+                      <h3 className="font-semibold text-sm mb-1">{hashtag}</h3>
+                      <p className="text-xs text-text-secondary italic">{aesthetic}</p>
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 mt-2 flex-wrap">
+                        <span className="text-xs flex items-center gap-1">
+                          <ArrowUpRight size={12} className={getGrowthColor(growth)} />
+                          <span className="text-muted">Growth:</span>
+                          <span className={cn("font-bold", getGrowthColor(growth))}>+{growth}%</span>
                         </span>
-                      )}
-                    </div>
-
-                    {/* Hashtag */}
-                    <h3 className="font-semibold text-sm mb-1">{trend.hashtag}</h3>
-                    <p className="text-xs text-text-secondary italic">{trend.aesthetic}</p>
-
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 mt-2 flex-wrap">
-                      <span className="text-xs flex items-center gap-1">
-                        <ArrowUpRight size={12} className={getGrowthColor(trend.growthPercent)} />
-                        <span className="text-muted">Growth:</span>
-                        <span className={cn("font-bold", getGrowthColor(trend.growthPercent))}>+{trend.growthPercent}%</span>
-                      </span>
-                      <span className="text-xs flex items-center gap-1">
-                        <MessageCircle size={12} className="text-pink-500" />
-                        <span className="text-muted">Weekly Posts:</span>
-                        <span className="font-medium">{trend.weeklyPosts}</span>
-                      </span>
-                      <span className="text-xs flex items-center gap-1">
-                        <Users size={12} className="text-blue-500" />
-                        <span className="text-muted">Audience:</span>
-                        <span className="font-medium">{trend.targetAudience}</span>
-                      </span>
-                    </div>
-
-                    {/* Brands */}
-                    <div className="flex flex-wrap gap-1 mt-3">
-                      {trend.topBrands.map(b => (
-                        <span key={b} className="text-[10px] bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded border border-pink-200">
-                          {b}
+                        <span className="text-xs flex items-center gap-1">
+                          <MessageCircle size={12} className="text-pink-500" />
+                          <span className="text-muted">Weekly Posts:</span>
+                          <span className="font-medium">{weeklyPosts}</span>
                         </span>
-                      ))}
+                        <span className="text-xs flex items-center gap-1">
+                          <Users size={12} className="text-blue-500" />
+                          <span className="text-muted">Audience:</span>
+                          <span className="font-medium">{audience}</span>
+                        </span>
+                      </div>
+
+                      {/* Brands */}
+                      <div className="flex flex-wrap gap-1 mt-3">
+                        {brands.map(b => (
+                          <span key={b} className="text-[10px] bg-pink-50 text-pink-700 px-1.5 py-0.5 rounded border border-pink-200">
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Ad Angle */}
+                      <div className="mt-3 p-3 bg-amber-50/60 rounded-lg border border-amber-200">
+                        <p className="text-[10px] font-medium text-amber-700 uppercase tracking-wide mb-1">Ad Angle</p>
+                        <p className="text-xs text-text-secondary">{adAngle}</p>
+                      </div>
                     </div>
 
-                    {/* Ad Angle */}
-                    <div className="mt-3 p-3 bg-amber-50/60 rounded-lg border border-amber-200">
-                      <p className="text-[10px] font-medium text-amber-700 uppercase tracking-wide mb-1">Ad Angle</p>
-                      <p className="text-xs text-text-secondary">{trend.adAngle}</p>
-                    </div>
+                    {/* Copy Button */}
+                    <button
+                      onClick={() => copyText(adAngle, signal.id)}
+                      className="btn-secondary text-xs shrink-0"
+                    >
+                      <Copy size={12} /> {copiedId === signal.id ? "Copied!" : "Copy Ad Brief"}
+                    </button>
                   </div>
-
-                  {/* Copy Button */}
-                  <button
-                    onClick={() => copyText(trend.adAngle, `ig-${i}`)}
-                    className="btn-secondary text-xs shrink-0"
-                  >
-                    <Copy size={12} /> {copiedId === `ig-${i}` ? "Copied!" : "Copy Ad Brief"}
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </>
         )}
 
@@ -382,69 +418,81 @@ export default function TrendIntelPage() {
             {filteredLyst.length === 0 && (
               <EmptyState icon={ShoppingBag} message="No Lyst products match the current filter." />
             )}
-            {filteredLyst.map((product, i) => (
-              <div key={`lyst-${i}`} className="glass-card p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    {/* Badges */}
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className="flex items-center gap-1 text-xs font-semibold bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full border border-violet-200">
-                        <ShoppingBag size={10} /> Lyst #{product.rank}
-                      </span>
-                      <span className="text-xs bg-surface text-muted px-2 py-0.5 rounded">{product.category}</span>
-                      <span className="text-xs font-semibold bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full">
-                        {product.brand}
-                      </span>
-                      {product.availableOnAjioLuxe ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200 flex items-center gap-0.5">
-                          <CheckCircle size={9} /> Available
+            {filteredLyst.map((signal, i) => {
+              const rank = signal.data.rank || i + 1;
+              const product = signal.data.product || signal.title;
+              const brand = signal.suggestedBrands[0] || "Unknown";
+              const searchGrowth = signal.data.searchGrowth || 0;
+              const socialMentions = signal.data.socialMentions || "N/A";
+              const category = signal.triggersWhat;
+              const adOpportunity = signal.suggestedAction;
+              // Lyst signals from the API always set availableOnAjioLuxe: true in mock data
+              const availableOnAjioLuxe = true;
+
+              return (
+                <div key={signal.id} className="glass-card p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      {/* Badges */}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="flex items-center gap-1 text-xs font-semibold bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full border border-violet-200">
+                          <ShoppingBag size={10} /> Lyst #{rank}
                         </span>
-                      ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600 border border-gray-200">
-                          Unavailable
+                        <span className="text-xs bg-surface text-muted px-2 py-0.5 rounded">{category}</span>
+                        <span className="text-xs font-semibold bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full">
+                          {brand}
                         </span>
-                      )}
+                        {availableOnAjioLuxe ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 border border-green-200 flex items-center gap-0.5">
+                            <CheckCircle size={9} /> Available
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                            Unavailable
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Product */}
+                      <h3 className="font-semibold text-sm mb-1">{product}</h3>
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 mt-2 flex-wrap">
+                        <span className="text-xs flex items-center gap-1">
+                          <ArrowUpRight size={12} className={getGrowthColor(searchGrowth)} />
+                          <span className="text-muted">Search Growth:</span>
+                          <span className={cn("font-bold", getGrowthColor(searchGrowth))}>+{searchGrowth}%</span>
+                        </span>
+                        <span className="text-xs flex items-center gap-1">
+                          <MessageCircle size={12} className="text-purple-500" />
+                          <span className="text-muted">Social:</span>
+                          <span className="font-medium">{socialMentions}</span>
+                        </span>
+                        <span className="text-xs flex items-center gap-1">
+                          <Eye size={12} className="text-blue-500" />
+                          <span className="text-muted">Severity:</span>
+                          <span className="font-medium capitalize">{signal.severity}</span>
+                        </span>
+                      </div>
+
+                      {/* Ad Opportunity */}
+                      <div className="mt-3 p-3 bg-amber-50/60 rounded-lg border border-amber-200">
+                        <p className="text-[10px] font-medium text-amber-700 uppercase tracking-wide mb-1">Ad Opportunity</p>
+                        <p className="text-xs text-text-secondary">{adOpportunity}</p>
+                      </div>
                     </div>
 
-                    {/* Product */}
-                    <h3 className="font-semibold text-sm mb-1">{product.product}</h3>
-
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 mt-2 flex-wrap">
-                      <span className="text-xs flex items-center gap-1">
-                        <ArrowUpRight size={12} className={getGrowthColor(product.searchGrowth)} />
-                        <span className="text-muted">Search Growth:</span>
-                        <span className={cn("font-bold", getGrowthColor(product.searchGrowth))}>+{product.searchGrowth}%</span>
-                      </span>
-                      <span className="text-xs flex items-center gap-1">
-                        <MessageCircle size={12} className="text-purple-500" />
-                        <span className="text-muted">Social:</span>
-                        <span className="font-medium">{product.socialMentions}</span>
-                      </span>
-                      <span className="text-xs flex items-center gap-1">
-                        <Eye size={12} className="text-blue-500" />
-                        <span className="text-muted">Page Views:</span>
-                        <span className="font-medium">{product.pageViews}</span>
-                      </span>
-                    </div>
-
-                    {/* Ad Opportunity */}
-                    <div className="mt-3 p-3 bg-amber-50/60 rounded-lg border border-amber-200">
-                      <p className="text-[10px] font-medium text-amber-700 uppercase tracking-wide mb-1">Ad Opportunity</p>
-                      <p className="text-xs text-text-secondary">{product.adOpportunity}</p>
-                    </div>
+                    {/* Copy Button */}
+                    <button
+                      onClick={() => copyText(adOpportunity, signal.id)}
+                      className="btn-secondary text-xs shrink-0"
+                    >
+                      <Copy size={12} /> {copiedId === signal.id ? "Copied!" : "Copy Ad Brief"}
+                    </button>
                   </div>
-
-                  {/* Copy Button */}
-                  <button
-                    onClick={() => copyText(product.adOpportunity, `lyst-${i}`)}
-                    className="btn-secondary text-xs shrink-0"
-                  >
-                    <Copy size={12} /> {copiedId === `lyst-${i}` ? "Copied!" : "Copy Ad Brief"}
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </>
         )}
       </div>

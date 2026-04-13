@@ -1,59 +1,45 @@
 import { NextResponse } from "next/server";
-import { getPinterestTrends } from "@/lib/signals/pinterest-trends";
-import { getInstagramTrends } from "@/lib/signals/instagram-hashtags";
-import { getLystTrending } from "@/lib/signals/lyst-trending";
+import { getPinterestSignals } from "@/lib/signals/pinterest-trends";
+import { getInstagramHashtagSignals } from "@/lib/signals/instagram-hashtags";
+import { getLystSignals } from "@/lib/signals/lyst-trending";
+import { cachedFetch, registerForPrewarm } from "@/lib/api-cache";
 
-export async function GET() {
-  const pinterest = getPinterestTrends();
-  const instagram = getInstagramTrends();
-  const lyst = getLystTrending();
+async function fetchTrendData() {
+  const [pinterestSignals, instagramSignals, lystSignals] = await Promise.all([
+    getPinterestSignals(),
+    getInstagramHashtagSignals(),
+    getLystSignals(),
+  ]);
 
-  // Compute viral count
   const viralCount =
-    pinterest.filter(t => t.trendDirection === "viral").length +
-    instagram.filter(t => t.growthPercent >= 300).length +
-    lyst.filter(p => p.searchGrowth >= 200).length;
+    pinterestSignals.filter((s: any) => s.severity === "high").length +
+    instagramSignals.filter((s: any) => s.severity === "high").length +
+    lystSignals.filter((s: any) => s.severity === "high").length;
 
-  // Gather all categories
-  const allCategories = [
-    ...pinterest.map(t => t.category),
-    ...instagram.map(t => t.category),
-    ...lyst.map(p => p.category),
-  ];
-  const categoryCounts: Record<string, number> = {};
-  for (const c of allCategories) {
-    categoryCounts[c] = (categoryCounts[c] || 0) + 1;
-  }
-  const topCategories = Object.entries(categoryCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([name, count]) => ({ name, count }));
-
-  // Gather all brands
   const allBrands = [
-    ...pinterest.flatMap(t => t.relatedBrands),
-    ...instagram.flatMap(t => t.topBrands),
-    ...lyst.map(p => p.brand),
+    ...pinterestSignals.flatMap((s: any) => s.suggestedBrands || []),
+    ...instagramSignals.flatMap((s: any) => s.suggestedBrands || []),
+    ...lystSignals.flatMap((s: any) => s.suggestedBrands || []),
   ];
   const brandCounts: Record<string, number> = {};
-  for (const b of allBrands) {
-    brandCounts[b] = (brandCounts[b] || 0) + 1;
-  }
+  for (const b of allBrands) brandCounts[b] = (brandCounts[b] || 0) + 1;
   const topBrands = Object.entries(brandCounts)
-    .sort((a, b) => b[1] - a[1])
+    .sort((a: any, b: any) => b[1] - a[1])
     .slice(0, 10)
     .map(([name, count]) => ({ name, count }));
 
-  return NextResponse.json({
-    pinterest,
-    instagram,
-    lyst,
-    summary: {
-      totalTrends: pinterest.length + instagram.length + lyst.length,
-      viralCount,
-      topCategories,
-      topBrands,
-    },
-    fetchedAt: new Date().toISOString(),
-  });
+  return {
+    pinterest: pinterestSignals,
+    instagram: instagramSignals,
+    lyst: lystSignals,
+    summary: { totalTrends: pinterestSignals.length + instagramSignals.length + lystSignals.length, viralCount, topBrands },
+  };
+}
+
+registerForPrewarm("trend-intel", fetchTrendData);
+
+export async function GET(request: Request) {
+  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "true";
+  const { data, fetchedAt } = await cachedFetch("trend-intel", fetchTrendData, forceRefresh);
+  return NextResponse.json({ ...data, fetchedAt });
 }

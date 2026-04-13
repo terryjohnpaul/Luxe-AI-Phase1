@@ -59,16 +59,36 @@ interface EventStack {
   expectedLift: string;
 }
 
+interface LiveSignal {
+  id: string;
+  type: string;
+  source: string;
+  title: string;
+  description: string;
+  location: string;
+  severity: "critical" | "high" | "medium" | "low";
+  triggersWhat: string;
+  targetArchetypes: string[];
+  suggestedBrands: string[];
+  suggestedAction: string;
+  confidence: number;
+  expiresAt: string;
+  detectedAt: string;
+  data: Record<string, any>;
+}
+
 interface ApiResponse {
   cities: CityRecommendation[];
   budgetWindows: BudgetWindow[];
   creativeFatigue: CreativeFatigueAlert[];
   eventStacks: EventStack[];
+  signals: LiveSignal[];
   summary: {
     citiesMonitored: number;
     activeWindows: number;
     fatigueAlerts: number;
     activeStacks: number;
+    totalSignals: number;
   };
 }
 
@@ -107,9 +127,10 @@ function isWindowActive(w: BudgetWindow): boolean {
 
 // --- Tabs ---
 
-type Tab = "cities" | "budget" | "fatigue" | "stacking";
+type Tab = "signals" | "cities" | "budget" | "fatigue" | "stacking";
 
 const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: "signals", label: "Live Signals", icon: Zap },
   { key: "cities", label: "City Targeting", icon: MapPin },
   { key: "budget", label: "Budget Optimizer", icon: DollarSign },
   { key: "fatigue", label: "Creative Fatigue", icon: Palette },
@@ -121,13 +142,17 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
 export default function SmartIntelPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>("cities");
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("signals");
 
   useEffect(() => {
     fetch("/api/smart-intel")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`Failed to load (${r.status})`);
+        return r.json();
+      })
       .then((d) => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch((err) => { setError(err.message || "Failed to load data"); setLoading(false); });
   }, []);
 
   if (loading) {
@@ -136,6 +161,24 @@ export default function SmartIntelPage() {
         <div className="text-center">
           <Loader2 size={32} className="animate-spin text-amber-500 mx-auto mb-4" />
           <p className="text-sm text-muted">Analyzing city signals, budget windows, creative health & event stacks...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <AlertTriangle size={32} className="text-red-500 mx-auto mb-4" />
+          <p className="text-sm text-red-600 font-medium mb-2">Failed to load Smart Intel</p>
+          <p className="text-xs text-muted mb-4">{error}</p>
+          <button
+            onClick={() => { setError(null); setLoading(true); fetch("/api/smart-intel").then((r) => { if (!r.ok) throw new Error(`Failed (${r.status})`); return r.json(); }).then((d) => { setData(d); setLoading(false); }).catch((err) => { setError(err.message); setLoading(false); }); }}
+            className="text-xs bg-brand-blue text-white px-4 py-2 rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -162,8 +205,9 @@ export default function SmartIntelPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
         {[
+          { label: "Live Signals", value: (data.summary.totalSignals ?? 0).toString(), color: "amber", icon: Zap },
           { label: "Cities Monitored", value: data.summary.citiesMonitored.toString(), color: "blue", icon: MapPin },
           { label: "Active Budget Windows", value: data.summary.activeWindows.toString(), color: "green", icon: DollarSign },
           { label: "Fatigue Alerts", value: data.summary.fatigueAlerts.toString(), color: "red", icon: AlertTriangle },
@@ -201,10 +245,115 @@ export default function SmartIntelPage() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === "signals" && <LiveSignalsTab signals={data.signals ?? []} />}
       {activeTab === "cities" && <CityTargetingTab cities={data.cities} />}
       {activeTab === "budget" && <BudgetOptimizerTab windows={data.budgetWindows} />}
       {activeTab === "fatigue" && <CreativeFatigueTab alerts={data.creativeFatigue} />}
       {activeTab === "stacking" && <EventStackingTab stacks={data.eventStacks} />}
+    </div>
+  );
+}
+
+// ============================================================
+// LIVE SIGNALS TAB
+// ============================================================
+
+function getSeverityBadge(severity: string) {
+  if (severity === "critical") return "bg-red-100 text-red-700 border border-red-200";
+  if (severity === "high") return "bg-orange-100 text-orange-700 border border-orange-200";
+  if (severity === "medium") return "bg-yellow-100 text-yellow-700 border border-yellow-200";
+  return "bg-green-100 text-green-700 border border-green-200";
+}
+
+function getSourceLabel(source: string) {
+  if (source.includes("City")) return { label: "City Intel", color: "bg-blue-50 text-blue-700" };
+  if (source.includes("occasion")) return { label: "Occasion", color: "bg-purple-50 text-purple-700" };
+  if (source.includes("gift")) return { label: "Gift", color: "bg-pink-50 text-pink-700" };
+  if (source.includes("sale")) return { label: "Sale", color: "bg-amber-50 text-amber-700" };
+  return { label: source, color: "bg-gray-50 text-gray-700" };
+}
+
+function LiveSignalsTab({ signals }: { signals: LiveSignal[] }) {
+  if (signals.length === 0) {
+    return (
+      <div className="glass-card p-8 text-center">
+        <Shield size={32} className="text-muted mx-auto mb-3" />
+        <p className="text-sm text-muted">No live signals detected at this time.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {signals.map((signal) => {
+        const src = getSourceLabel(signal.source);
+        return (
+          <div key={signal.id} className={cn(
+            "glass-card p-5",
+            signal.severity === "critical" && "ring-2 ring-red-400/50",
+            signal.severity === "high" && "ring-1 ring-orange-300/30"
+          )}>
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <Zap size={14} className={signal.severity === "critical" ? "text-red-500" : signal.severity === "high" ? "text-orange-500" : "text-amber-500"} />
+                  <h3 className="font-semibold text-sm">{signal.title}</h3>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                  <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded", src.color)}>
+                    {src.label}
+                  </span>
+                  <span className="text-[10px] text-muted flex items-center gap-1">
+                    <MapPin size={9} /> {signal.location}
+                  </span>
+                </div>
+              </div>
+              <span className={cn(
+                "text-[10px] font-semibold px-2.5 py-1 rounded-full capitalize shrink-0 ml-2",
+                getSeverityBadge(signal.severity)
+              )}>
+                {signal.severity}
+              </span>
+            </div>
+
+            {/* Description */}
+            <p className="text-xs text-text-secondary mb-3 whitespace-pre-line leading-relaxed">{signal.description}</p>
+
+            {/* Suggested Action */}
+            <div className="p-3 bg-surface/50 border border-card-border rounded-lg mb-3">
+              <p className="text-[10px] font-medium text-muted uppercase tracking-wide mb-1">Suggested Action</p>
+              <p className="text-xs text-text-secondary">{signal.suggestedAction}</p>
+            </div>
+
+            {/* Brands + Confidence row */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {signal.suggestedBrands.slice(0, 5).map((brand) => (
+                  <span key={brand} className="text-[10px] font-semibold bg-brand-blue/10 text-brand-blue px-1.5 py-0.5 rounded">
+                    {brand}
+                  </span>
+                ))}
+                {signal.suggestedBrands.length > 5 && (
+                  <span className="text-[10px] text-muted">+{signal.suggestedBrands.length - 5} more</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted">Confidence</span>
+                <div className="w-16 bg-surface rounded-full h-1.5">
+                  <div
+                    className={cn(
+                      "h-1.5 rounded-full transition-all",
+                      signal.confidence >= 0.9 ? "bg-green-500" : signal.confidence >= 0.8 ? "bg-blue-500" : "bg-yellow-500"
+                    )}
+                    style={{ width: `${signal.confidence * 100}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-semibold">{Math.round(signal.confidence * 100)}%</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

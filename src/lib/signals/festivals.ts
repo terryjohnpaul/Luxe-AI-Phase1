@@ -59,7 +59,12 @@ export function getFestivalSignals(): Signal[] {
 
   for (const festival of FESTIVAL_CALENDAR_2026) {
     const festDate = new Date(festival.date2026);
-    const daysUntil = Math.ceil((festDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    // Use IST (UTC+5:30) for day calculation — festivals are India-specific
+    const IST_MS = 5.5 * 3600000;
+    const todayIST = new Date(today.getTime() + IST_MS);
+    const todayMidnightIST = new Date(todayIST.getFullYear(), todayIST.getMonth(), todayIST.getDate());
+    const festMidnight = new Date(festDate.getFullYear(), festDate.getMonth(), festDate.getDate());
+    const daysUntil = Math.round((festMidnight.getTime() - todayMidnightIST.getTime()) / 86400000);
 
     // Signal if within the lead time window
     if (daysUntil > 0 && daysUntil <= festival.daysBeforeToSignal) {

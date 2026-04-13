@@ -216,7 +216,7 @@ export function getBudgetWindows(): BudgetWindow[] {
       dateRange: "Every Monday 8am-12pm",
       multiplier: 1.3,
       reason: "Monday morning Instagram scrolling creates FOMO from weekend posts. People see friends' luxury purchases and want to keep up.",
-      recommendation: "Run 'Start your week right' campaigns on Monday morning. Social proof ads — 'Trending this weekend on Ajio Luxe' messaging.",
+      recommendation: "Run 'Start your week right' campaigns on Monday morning. Social proof ads — 'Trending this weekend on luxury fashion' messaging.",
       confidence: 0.75,
     },
     {
@@ -491,85 +491,9 @@ export function getSmartRecommendationSignals(): Signal[] {
     }
   });
 
-  // Budget window signals (active windows)
-  const windows = getBudgetWindows();
-  const now_date = now.getDate();
-  const now_day = now.getDay();
-  windows.forEach(w => {
-    let isActive = false;
-    if (w.id === "salary-week" && (now_date >= 25 || now_date <= 3)) isActive = true;
-    if (w.id === "weekend-surge" && (now_day === 0 || now_day === 6)) isActive = true;
-    if (w.id === "monday-fomo" && now_day === 1) isActive = true;
-    if (w.id === "mid-month-lull" && now_date >= 10 && now_date <= 20) isActive = true;
-    if (w.id === "payday-bonus" && now.getMonth() === 2) isActive = true;
-    if (w.id === "first-salary" && now.getMonth() === 6 && now_date <= 10) isActive = true;
-
-    if (isActive) {
-      signals.push({
-        id: `budget-${w.id}`,
-        type: "salary_cycle" as const,
-        title: `Budget: ${w.window} — ${w.multiplier}x spend recommended`,
-        description: `${w.reason} ${w.recommendation}`,
-        location: "Pan India",
-        severity: w.multiplier >= 2.0 ? "high" as const : w.multiplier < 1.0 ? "low" as const : "medium" as const,
-        triggersWhat: "Budget adjustment",
-        targetArchetypes: ["All Segments"],
-        suggestedBrands: [],
-        confidence: w.confidence,
-        source: "Budget Optimizer",
-        detectedAt: now,
-        expiresAt: new Date(now.getTime() + 86400000),
-        suggestedAction: w.recommendation,
-        data: { window: w.window, multiplier: w.multiplier },
-      });
-    }
-  });
-
-  // Creative fatigue signals (only warning/fatigued/dead)
-  const fatigue = getCreativeFatigueAlerts().filter(f => f.fatigueLevel !== "healthy");
-  fatigue.forEach(f => {
-    signals.push({
-      id: `fatigue-${f.id}`,
-      type: "competitor" as const,
-      title: `Creative Fatigue: ${f.brand} — ${f.fatigueLevel.toUpperCase()} (${f.daysRunning} days)`,
-      description: `${f.creative}. CTR: ${f.currentCtr}% (peak was ${f.peakCtr}%). ${f.recommendation}`,
-      location: "Pan India",
-      severity: f.fatigueLevel === "dead" ? "critical" as const : f.fatigueLevel === "fatigued" ? "high" as const : "medium" as const,
-      triggersWhat: "Creative rotation",
-      targetArchetypes: ["Fashion Loyalist"],
-      suggestedBrands: [f.brand],
-      confidence: 0.9,
-      source: "Creative Monitor",
-      detectedAt: now,
-      expiresAt: new Date(now.getTime() + 3 * 86400000),
-      suggestedAction: f.suggestedSwap,
-      data: { campaign: f.campaignName, daysRunning: f.daysRunning, ctr: f.currentCtr, peakCtr: f.peakCtr, fatigueLevel: f.fatigueLevel },
-    });
-  });
-
-  // Event stacking signals
-  const stacks = getEventStacks();
-  stacks.forEach(s => {
-    if (s.stackScore >= 5) {
-      signals.push({
-        id: `stack-${s.id}`,
-        type: "festival" as const,
-        title: `Event Stack (${s.stackScore}/10): ${s.signals.filter(Boolean).join(" + ")}`,
-        description: `${s.recommendation} ${s.expectedLift}`,
-        location: s.city,
-        severity: s.stackScore >= 8 ? "critical" as const : s.stackScore >= 6 ? "high" as const : "medium" as const,
-        triggersWhat: "Multi-signal campaign",
-        targetArchetypes: ["All Segments"],
-        suggestedBrands: [],
-        confidence: 0.85,
-        source: "Event Stacking",
-        detectedAt: now,
-        expiresAt: new Date(now.getTime() + 2 * 86400000),
-        suggestedAction: s.budgetAction,
-        data: { stackScore: s.stackScore, city: s.city, signals: s.signals },
-      });
-    }
-  });
+  // NOTE: Budget Optimizer, Creative Fatigue, and Event Stacking signals
+  // are disabled until real campaign data is connected via Meta/Google Ads API.
+  // They will activate automatically when the flywheel has real campaign data to analyze.
 
   return signals;
 }

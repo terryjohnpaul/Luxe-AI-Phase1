@@ -144,48 +144,7 @@ export function getSalaryCycleSignals(): Signal[] {
     });
   }
 
-  // === MONDAY FOMO (Mon-Tue) ===
-  const dayOfWeek = today.getDay();
-  if (dayOfWeek === 1 || dayOfWeek === 2) {
-    signals.push({
-      id: signalId("salary", "monday-fomo"),
-      type: "social_trend",
-      source: "date-rules",
-      title: dayOfWeek === 1 ? "Monday FOMO — post-weekend browsing spike" : "Tuesday follow-through — weekend FOMO converts",
-      description: "Mon-Tue: People see weekend party photos on Instagram and feel they need better outfits. Fashion browsing spikes 15-20%.",
-      location: "Pan India",
-      severity: "low",
-      triggersWhat: "Party wear, casual luxury, statement pieces — 'be ready for next weekend'",
-      targetArchetypes: ["Aspirant", "Urban Achiever"],
-      suggestedBrands: ["Kenzo", "Diesel", "All Saints"],
-      suggestedAction: "Increase retargeting bids by 10% on Monday-Tuesday. Push party/weekend wear.",
-      confidence: 0.65,
-      expiresAt: expiresIn(48),
-      data: { dayOfWeek },
-      detectedAt: today,
-    });
-  }
-
-  // === WEEKEND SHOPPING (Fri-Sat) ===
-  if (dayOfWeek === 5 || dayOfWeek === 6) {
-    signals.push({
-      id: signalId("salary", "weekend-shopping"),
-      type: "salary_cycle",
-      source: "date-rules",
-      title: "Weekend shopping window open",
-      description: "Friday-Saturday: Higher conversion rates as families browse together. Tier 2 cities peak on weekends.",
-      location: "Pan India (especially Tier 2 cities)",
-      severity: "low",
-      triggersWhat: "All categories — family browsing, considered purchases",
-      targetArchetypes: ["Occasional Splurger", "Urban Achiever"],
-      suggestedBrands: ["All brands"],
-      suggestedAction: "Boost Tier 2 city campaigns by 15% on weekends. Push 'complete the look' messaging.",
-      confidence: 0.70,
-      expiresAt: expiresIn(48),
-      data: { dayOfWeek },
-      detectedAt: today,
-    });
-  }
+  // Removed: Monday FOMO and Weekend Shopping signals — too generic, not actionable for luxury
 
   return signals;
 }

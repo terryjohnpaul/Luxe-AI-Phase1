@@ -3,7 +3,7 @@
  * This file contains the actual business logic for each job.
  */
 
-import type { OptimizationJobData, SignalJobData, SyncJobData, CreativeJobData } from "./setup";
+import type { OptimizationJobData, SignalJobData, SyncJobData, CreativeJobData, LearningJobData } from "./setup";
 import { askClaudeStructured } from "@/lib/ai/claude";
 import { optimizationAnalysisPrompt, signalInterpretationPrompt } from "@/lib/ai/prompts";
 
@@ -258,4 +258,54 @@ async function generateAdVariants(orgId: string, payload: any) {
 async function generateAdCopy(orgId: string, payload: any) {
   console.log(`[Creative] Generating ad copy for org ${orgId}`);
   // TODO: Call Claude with adCopyPrompt
+}
+
+// ============================================================
+// LEARNING / FLYWHEEL PROCESSOR
+// ============================================================
+
+export async function processLearning(data: LearningJobData) {
+  const { type, organizationId } = data;
+
+  switch (type) {
+    case "evaluate_predictions": {
+      const { evaluatePendingPredictions } = await import("@/lib/engines/prediction-evaluator");
+      const result = await evaluatePendingPredictions(organizationId);
+      console.log(`[Learning] Evaluated ${result.evaluated} predictions. Avg accuracy: ${result.avgAccuracy?.toFixed(2) ?? "N/A"}`);
+      return result;
+    }
+
+    case "detect_drift": {
+      const { detectDrift, retrainDriftingModels } = await import("@/lib/engines/drift-detector");
+      const reports = await detectDrift(organizationId);
+      const drifting = reports.filter(r => r.status !== "stable");
+
+      if (drifting.length > 0) {
+        console.log(`[Learning] Drift detected in ${drifting.length} signal types:`, drifting.map(d => d.signalType));
+        const retrained = await retrainDriftingModels(organizationId);
+        console.log(`[Learning] Retrained models for: ${retrained.join(", ")}`);
+        return { drifting, retrained };
+      }
+
+      console.log("[Learning] No drift detected. All models stable.");
+      return { drifting: [], retrained: [] };
+    }
+
+    case "retrain_models": {
+      const { retrainDriftingModels } = await import("@/lib/engines/drift-detector");
+      const retrained = await retrainDriftingModels(organizationId);
+      console.log(`[Learning] Force retrained: ${retrained.join(", ") || "none needed"}`);
+      return { retrained };
+    }
+
+    case "compute_benchmarks": {
+      const { computeVerticalBenchmarks } = await import("@/lib/engines/vertical-benchmarks");
+      const benchmarks = await computeVerticalBenchmarks();
+      console.log(`[Learning] Computed vertical benchmarks for ${benchmarks.length} signal types`);
+      return { benchmarks: benchmarks.length };
+    }
+
+    default:
+      console.log(`[Learning] Unknown job type: ${type}`);
+  }
 }

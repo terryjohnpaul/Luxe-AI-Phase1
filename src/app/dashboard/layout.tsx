@@ -26,6 +26,7 @@ import {
   Hash,
   Brain,
   DollarSign,
+  Target,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -34,6 +35,7 @@ const navigation = [
     label: "CORE",
     items: [
       { name: "Command Center", href: "/dashboard/command-center", icon: LayoutDashboard },
+      { name: "Flywheel", href: "/dashboard/flywheel", icon: Brain },
       { name: "Optimization Engine", href: "/dashboard/optimization", icon: Zap },
       { name: "Audiences", href: "/dashboard/audiences", icon: Users },
     ],
@@ -57,14 +59,8 @@ const navigation = [
       { name: "Competitor Ads", href: "/dashboard/competitors", icon: Eye },
       { name: "Feed Intelligence", href: "/dashboard/feed", icon: ShoppingCart },
       { name: "Signal Processing", href: "/dashboard/signals", icon: Radio },
+      { name: "Prediction Accuracy", href: "/dashboard/prediction-accuracy", icon: Target },
       { name: "Performance Lab", href: "/dashboard/performance", icon: BarChart3 },
-    ],
-  },
-
-  {
-    label: "MERCHANDISING",
-    items: [
-      { name: "Merch Bridge", href: "/dashboard/merchandising", icon: Building2 },
     ],
   },
   {

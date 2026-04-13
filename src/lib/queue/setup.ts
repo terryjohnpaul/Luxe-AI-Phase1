@@ -76,6 +76,11 @@ export type SyncJobData = {
   adAccountId: string;
 };
 
+export type LearningJobData = {
+  type: "evaluate_predictions" | "detect_drift" | "retrain_models" | "compute_benchmarks";
+  organizationId?: string;
+};
+
 // ============================================================
 // SCHEDULE RECURRING JOBS
 // ============================================================
@@ -127,6 +132,49 @@ export async function setupRecurringJobs(organizationId: string) {
     {
       repeat: { every: 30 * 60 * 1000 },
       jobId: `google-sync-${organizationId}`,
+    }
+  );
+}
+
+// Learning / Flywheel queue
+export const learningQueue = new Queue("learning", {
+  connection,
+  defaultJobOptions: {
+    removeOnComplete: 50,
+    removeOnFail: 20,
+    attempts: 2,
+    backoff: { type: "exponential", delay: 10000 },
+  },
+});
+
+export async function setupLearningJobs() {
+  // Daily: evaluate predictions (run after campaign results sync)
+  await learningQueue.add(
+    "evaluate-predictions",
+    { type: "evaluate_predictions" } as LearningJobData,
+    {
+      repeat: { every: 24 * 60 * 60 * 1000 }, // daily
+      jobId: "evaluate-predictions-global",
+    }
+  );
+
+  // Weekly: detect drift + retrain
+  await learningQueue.add(
+    "detect-drift",
+    { type: "detect_drift" } as LearningJobData,
+    {
+      repeat: { every: 7 * 24 * 60 * 60 * 1000 }, // weekly
+      jobId: "detect-drift-global",
+    }
+  );
+
+  // Weekly: compute cross-user benchmarks
+  await learningQueue.add(
+    "compute-benchmarks",
+    { type: "compute_benchmarks" } as LearningJobData,
+    {
+      repeat: { every: 7 * 24 * 60 * 60 * 1000 },
+      jobId: "compute-benchmarks-global",
     }
   );
 }

@@ -1,14 +1,14 @@
 /**
- * Brand Tier Configuration — VERIFIED against luxe.ajio.com (March 2026)
+ * Brand Tier Configuration — VERIFIED against brand official site (March 2026)
  *
  * LUXURY: Never discount, aspirational messaging only, target Loyalists, high AOV
  * PREMIUM: Selective discounts, professional messaging, target Achievers
  * ACCESSIBLE: Can discount, value messaging OK, target Aspirants, EMI options
  *
  * Sources verified:
- * - luxe.ajio.com brand pages
+ * - brand official site brand pages
  * - India Retailing (Reliance Brands 10 new brands article)
- * - Individual brand store pages on Ajio Luxe
+ * - Individual brand store pages online
  */
 
 export type BrandTier = "luxury" | "premium" | "accessible";
@@ -17,7 +17,7 @@ export interface BrandConfig {
   name: string;
   tier: BrandTier;
   priceRange: string;
-  categories: string[];        // What they actually sell on Ajio Luxe
+  categories: string[];        // What they actually sell online
   canDiscount: boolean;
   maxDiscountPercent: number;
   targetArchetypes: string[];
@@ -30,8 +30,8 @@ export interface BrandConfig {
   adFrequency: "low" | "medium" | "high";
   retargetingWindow: number;
   contentStyle: "editorial" | "product" | "mixed";
-  verified: boolean;           // Whether verified on luxe.ajio.com
-  storeUrl: string;            // Ajio Luxe brand page URL
+  verified: boolean;           // Whether verified on brand official site
+  storeUrl: string;            // Brand page URL
 }
 
 // ============================================================
@@ -52,7 +52,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Understated luxury. Intrecciato weave. Craftsmanship speaks louder than logos.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/bottega-veneta",
+    verified: true, storeUrl: "https://brand official site/b/bottega-veneta",
   },
   "Amiri": {
     name: "Amiri", tier: "luxury",
@@ -63,7 +63,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "LA luxury streetwear. Rock and roll meets high fashion. Premium rebellion.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/amiri",
+    verified: true, storeUrl: "https://brand official site/b/amiri",
   },
   "Casablanca": {
     name: "Casablanca", tier: "luxury",
@@ -74,7 +74,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Sport-meets-luxury. Tennis club aesthetic. Maximalist prints and silk.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/casablanca",
+    verified: true, storeUrl: "https://brand official site/b/casablanca",
   },
   "Jacquemus": {
     name: "Jacquemus", tier: "luxury",
@@ -85,7 +85,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "French Riviera. Minimalist sensuality. Le Chiquito icon. Art-meets-fashion.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/fc/830301004/women-handbags/brands/jacquemus",
+    verified: true, storeUrl: "https://brand official site/fc/830301004/women-handbags/brands/jacquemus",
   },
   "Jimmy Choo": {
     name: "Jimmy Choo", tier: "luxury",
@@ -96,7 +96,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Red carpet glamour. Empowerment through elegance. The shoe every woman dreams of.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/jimmy-choo",
+    verified: true, storeUrl: "https://brand official site/b/jimmy-choo",
   },
   "Stella McCartney": {
     name: "Stella McCartney", tier: "luxury",
@@ -107,7 +107,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Conscious luxury. Sustainability as sophistication. Modern femininity without cruelty.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/stella-mccartney",
+    verified: true, storeUrl: "https://brand official site/b/stella-mccartney",
   },
   "Zimmermann": {
     name: "Zimmermann", tier: "luxury",
@@ -118,7 +118,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Australian bohemian luxury. Romantic femininity. Resort and vacation perfection.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/zimmermann",
+    verified: true, storeUrl: "https://brand official site/b/zimmermann",
   },
   "Marc Jacobs": {
     name: "Marc Jacobs", tier: "luxury",
@@ -129,7 +129,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "New York downtown cool. The Tote Bag icon. Playful luxury with edge.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/marc-jacobs",
+    verified: true, storeUrl: "https://brand official site/b/marc-jacobs",
   },
   "Max Mara": {
     name: "Max Mara", tier: "luxury",
@@ -140,7 +140,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Italian tailoring excellence. The iconic camel coat. Timeless elegance.",
     showPrice: false, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 90, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/max-mara",
+    verified: true, storeUrl: "https://brand official site/b/max-mara",
   },
 
   // ===================== PREMIUM TIER =====================
@@ -155,7 +155,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Parisian casual luxury. The Ami de Coeur heart logo. Effortlessly cool.",
     showPrice: true, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "mixed",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/ami-paris",
+    verified: true, storeUrl: "https://brand official site/b/ami-paris",
   },
   "Hugo Boss": {
     name: "Hugo Boss", tier: "premium",
@@ -166,7 +166,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Professional excellence. Modern confidence. German precision meets style.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "direct", adFrequency: "medium", retargetingWindow: 45, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/hugo-boss",
+    verified: true, storeUrl: "https://brand official site/b/hugo-boss",
   },
   "Kenzo": {
     name: "Kenzo", tier: "premium",
@@ -177,7 +177,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Japanese meets Parisian. Tiger energy. Bold print mastery. Boke Flower and Tiger icons.",
     showPrice: true, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "mixed",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/kenzo",
+    verified: true, storeUrl: "https://brand official site/b/kenzo",
   },
   "Diesel": {
     name: "Diesel", tier: "premium",
@@ -188,7 +188,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Rebellious Italian. Denim DNA. For Successful Living. Bold and unapologetic.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "direct", adFrequency: "medium", retargetingWindow: 45, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/diesel",
+    verified: true, storeUrl: "https://brand official site/b/diesel",
   },
   "Emporio Armani": {
     name: "Emporio Armani", tier: "premium",
@@ -199,7 +199,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Italian sophistication. The Eagle logo. Urban elegance for the modern professional.",
     showPrice: true, showEmi: false, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "mixed",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/emporio-armani",
+    verified: true, storeUrl: "https://brand official site/b/emporio-armani",
   },
   "Versace": {
     name: "Versace", tier: "premium",
@@ -210,7 +210,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Bold glamour. Medusa heritage. Italian opulence meets contemporary design.",
     showPrice: true, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "mixed",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/versace",
+    verified: true, storeUrl: "https://brand official site/b/versace",
   },
   "Prada": {
     name: "Prada", tier: "premium",
@@ -218,10 +218,10 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     categories: ["Fragrances", "Sunglasses", "Eyewear"],
     canDiscount: true, maxDiscountPercent: 10,
     targetArchetypes: ["Fashion Loyalist", "Urban Achiever"],
-    messagingTone: "Italian intellectual luxury. Fragrance and eyewear on Ajio Luxe. Full fashion available at Prada boutiques.",
+    messagingTone: "Italian intellectual luxury. Fragrance and eyewear online. Full fashion available at Prada boutiques.",
     showPrice: true, showEmi: false, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 60, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/prada",
+    verified: true, storeUrl: "https://brand official site/b/prada",
   },
   "Farm Rio": {
     name: "Farm Rio", tier: "premium",
@@ -232,7 +232,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Brazilian tropical joy. Vibrant prints. Vacation energy every day. Bold colors.",
     showPrice: true, showEmi: false, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 45, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/farm-rio",
+    verified: true, storeUrl: "https://brand official site/b/farm-rio",
   },
   "Cult Gaia": {
     name: "Cult Gaia", tier: "premium",
@@ -243,7 +243,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Art-meets-fashion. The Ark bag icon. Sculptural design. Instagram-famous accessories.",
     showPrice: true, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/cult-gaia",
+    verified: true, storeUrl: "https://brand official site/b/cult-gaia",
   },
   "Self Portrait": {
     name: "Self Portrait", tier: "premium",
@@ -254,7 +254,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Modern lace. Event-ready elegance. Architectural femininity. The party dress brand.",
     showPrice: true, showEmi: false, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/self-portrait",
+    verified: true, storeUrl: "https://brand official site/b/self-portrait",
   },
   "Acne Studios": {
     name: "Acne Studios", tier: "premium",
@@ -265,7 +265,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Scandinavian minimalism. Face logo. Fashion insider essential. Creative direction.",
     showPrice: true, showEmi: false, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 60, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/acne-studios",
+    verified: true, storeUrl: "https://brand official site/b/acne-studios",
   },
   "Maison Kitsune": {
     name: "Maison Kitsune", tier: "premium",
@@ -276,7 +276,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Franco-Japanese cool. The fox logo. Music, fashion, and coffee culture combined.",
     showPrice: true, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "mixed",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/maison-kitsune",
+    verified: true, storeUrl: "https://brand official site/b/maison-kitsune",
   },
   "Y-3": {
     name: "Y-3", tier: "premium",
@@ -287,7 +287,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Yohji Yamamoto x Adidas. Where sport meets avant-garde. The ultimate luxury sneaker.",
     showPrice: true, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 60, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/y-3",
+    verified: true, storeUrl: "https://brand official site/b/y-3",
   },
   "A-Cold-Wall": {
     name: "A-Cold-Wall", tier: "premium",
@@ -298,7 +298,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "British industrial aesthetic. Architecture-inspired fashion. Samuel Ross vision.",
     showPrice: true, showEmi: false, scarcityMessaging: true, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "low", retargetingWindow: 60, contentStyle: "editorial",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/a-cold-wall",
+    verified: true, storeUrl: "https://brand official site/b/a-cold-wall",
   },
   "Sandro": {
     name: "Sandro", tier: "premium",
@@ -309,7 +309,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Parisian effortless chic. Sophisticated yet accessible French style.",
     showPrice: true, showEmi: false, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 45, contentStyle: "mixed",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/sandro",
+    verified: true, storeUrl: "https://brand official site/b/sandro",
   },
   "Maje": {
     name: "Maje", tier: "premium",
@@ -320,7 +320,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Parisian cool-girl. Rebellious femininity with a French twist.",
     showPrice: true, showEmi: false, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "aspirational", adFrequency: "medium", retargetingWindow: 45, contentStyle: "mixed",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/maje",
+    verified: true, storeUrl: "https://brand official site/b/maje",
   },
 
   // ===================== ACCESSIBLE TIER =====================
@@ -335,7 +335,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "London edge. Leather jackets DNA. Accessible premium for the bold and modern.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 30, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/allsaints",
+    verified: true, storeUrl: "https://brand official site/b/allsaints",
   },
   "Coach": {
     name: "Coach", tier: "accessible",
@@ -346,7 +346,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "American heritage craft. The Tabby bag. Accessible luxury. The gateway designer bag.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 30, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/coach",
+    verified: true, storeUrl: "https://brand official site/b/coach",
   },
   "Michael Kors": {
     name: "Michael Kors", tier: "accessible",
@@ -357,7 +357,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Jet-set glamour. MK monogram. Bold, polished, and always runway-ready.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 30, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/michael-kors",
+    verified: true, storeUrl: "https://brand official site/b/michael-kors",
   },
   "Kate Spade": {
     name: "Kate Spade", tier: "accessible",
@@ -368,7 +368,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Playful sophistication. Color and joy. Smart femininity with a wink.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 30, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/kate-spade",
+    verified: true, storeUrl: "https://brand official site/b/kate-spade",
   },
   "Ted Baker": {
     name: "Ted Baker", tier: "accessible",
@@ -379,7 +379,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "British quirk. No ordinary designer. Attention to detail. Affordable elegance.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "value", adFrequency: "high", retargetingWindow: 21, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/ted-baker",
+    verified: true, storeUrl: "https://brand official site/b/ted-baker",
   },
   "Paul Smith": {
     name: "Paul Smith", tier: "accessible",
@@ -390,7 +390,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "British wit. Rainbow stripe signature. Classic with a playful twist.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 30, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/paul-smith",
+    verified: true, storeUrl: "https://brand official site/b/paul-smith",
   },
   "Swarovski": {
     name: "Swarovski", tier: "accessible",
@@ -401,7 +401,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Crystal brilliance. Gift-perfect. Everyday sparkle. The entry-point to luxury jewelry.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 21, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/swarovski",
+    verified: true, storeUrl: "https://brand official site/b/swarovski",
   },
   "TUMI": {
     name: "TUMI", tier: "accessible",
@@ -412,7 +412,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Travel perfection. Business essential. Built to perform. The professional's luggage.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: false,
     ctaStyle: "direct", adFrequency: "medium", retargetingWindow: 45, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/tumi",
+    verified: true, storeUrl: "https://brand official site/b/tumi",
   },
   "Armani Exchange": {
     name: "Armani Exchange", tier: "accessible",
@@ -423,7 +423,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Armani DNA at accessible price. Urban streetwear with Italian flair.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 21, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/armani-exchange",
+    verified: true, storeUrl: "https://brand official site/b/armani-exchange",
   },
   "G-Star Raw": {
     name: "G-Star Raw", tier: "accessible",
@@ -434,7 +434,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Raw denim innovation. 3D construction. Dutch design meets street culture.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "value", adFrequency: "high", retargetingWindow: 21, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/g-star-raw",
+    verified: true, storeUrl: "https://brand official site/b/g-star-raw",
   },
   "Replay": {
     name: "Replay", tier: "accessible",
@@ -445,7 +445,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Italian denim heritage. Authentic and modern. Premium denim for every day.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "value", adFrequency: "high", retargetingWindow: 21, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/replay",
+    verified: true, storeUrl: "https://brand official site/b/replay",
   },
   "Roberto Cavalli": {
     name: "Roberto Cavalli", tier: "accessible",
@@ -456,7 +456,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "Italian glamour. Animal prints. Bold and dramatic luxury accessories.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "medium", retargetingWindow: 30, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/roberto-cavalli",
+    verified: true, storeUrl: "https://brand official site/b/roberto-cavalli",
   },
   "Lacoste": {
     name: "Lacoste", tier: "accessible",
@@ -467,7 +467,7 @@ export const DEFAULT_BRAND_CONFIGS: Record<string, BrandConfig> = {
     messagingTone: "French sporting elegance. The crocodile. Timeless polos and relaxed luxury.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "high", retargetingWindow: 21, contentStyle: "product",
-    verified: true, storeUrl: "https://luxe.ajio.com/b/lacoste",
+    verified: true, storeUrl: "https://brand official site/b/lacoste",
   },
 };
 
@@ -477,7 +477,7 @@ export function getBrandConfig(brandName: string): BrandConfig {
     priceRange: "Variable", categories: ["Various"],
     canDiscount: true, maxDiscountPercent: 30,
     targetArchetypes: ["Urban Achiever", "Aspirant"],
-    messagingTone: "Premium fashion on Ajio Luxe.",
+    messagingTone: "Premium fashion online.",
     showPrice: true, showEmi: true, scarcityMessaging: false, urgencyMessaging: true,
     ctaStyle: "direct", adFrequency: "medium", retargetingWindow: 30, contentStyle: "product",
     verified: false, storeUrl: "",
