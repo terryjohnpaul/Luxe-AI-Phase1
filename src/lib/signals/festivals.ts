@@ -18,6 +18,38 @@ interface Festival {
   targetArchetypes: string[];
   suggestedBrands: string[];
 }
+// === Festival Fashion Intelligence from 144Cr Ad Spend Analysis ===
+const FESTIVAL_FASHION_MAP: Record<string, { categories: string[]; color_codes?: string[]; regional_focus?: string[]; pre_ramp_weeks: number; anti_signal?: boolean }> = {
+  'navratri': { categories: ['chaniya_choli', 'garba_wear', 'ethnic_wear'], color_codes: ['white','red','royal_blue','yellow','green','grey','orange','pink','purple'], regional_focus: ['Gujarat','Maharashtra','Rajasthan'], pre_ramp_weeks: 3 },
+  'durga_puja': { categories: ['designer_sarees', 'bengali_luxury', 'white_red'], regional_focus: ['West Bengal','Jharkhand'], pre_ramp_weeks: 2 },
+  'diwali': { categories: ['all_luxury', 'gifting', 'ethnic_wear'], pre_ramp_weeks: 4, anti_signal: true },
+  'onam': { categories: ['kasavu_sarees', 'white_gold', 'kerala_traditional'], regional_focus: ['Kerala'], pre_ramp_weeks: 2 },
+  'eid': { categories: ['designer_ethnic', 'indo_western', 'lucknowi'], regional_focus: ['UP','Telangana','Kerala'], pre_ramp_weeks: 3 },
+  'karva_chauth': { categories: ['red_outfits', 'sarees', 'bridal_jewelry'], regional_focus: ['North India'], pre_ramp_weeks: 2 },
+  'akshaya_tritiya': { categories: ['gold_adjacent', 'premium_ethnic', 'luxury_accessories'], pre_ramp_weeks: 1 },
+  'holi': { categories: ['white_outfits', 'party_wear', 'casual_ethnic'], pre_ramp_weeks: 2 },
+  'baisakhi': { categories: ['punjabi_luxury', 'phulkari', 'festive_ethnic'], regional_focus: ['Punjab','Haryana'], pre_ramp_weeks: 2 },
+  'pongal': { categories: ['silk_sarees', 'south_indian_traditional'], regional_focus: ['Tamil Nadu'], pre_ramp_weeks: 2 },
+  'ganesh_chaturthi': { categories: ['traditional_wear', 'festive_ethnic'], regional_focus: ['Maharashtra','Karnataka'], pre_ramp_weeks: 2 },
+};
+
+// Map festival names from calendar to FESTIVAL_FASHION_MAP keys
+const FESTIVAL_NAME_TO_KEY: Record<string, string> = {
+  'Navratri Start': 'navratri',
+  'Diwali': 'diwali',
+  'Onam': 'onam',
+  'Eid ul-Fitr': 'eid',
+  'Karwa Chauth': 'karva_chauth',
+  'Holi': 'holi',
+  'Baisakhi': 'baisakhi',
+  'Ganesh Chaturthi': 'ganesh_chaturthi',
+};
+
+function getFestivalFashionData(festivalName: string) {
+  const key = FESTIVAL_NAME_TO_KEY[festivalName];
+  return key ? FESTIVAL_FASHION_MAP[key] : null;
+}
+
 
 const FESTIVAL_CALENDAR_2026: Festival[] = [
   // === NATIONAL / PAN-INDIA ===
@@ -88,7 +120,7 @@ export function getFestivalSignals(): Signal[] {
           : `Prepare ${festival.name} campaign. ${daysUntil} days until festival.`,
         confidence: 0.95, // Calendar events are highly reliable
         expiresAt: festDate,
-        data: { festival, daysUntil },
+        data: { festival, daysUntil, fashionData: getFestivalFashionData(festival.name) },
         detectedAt: today,
       });
     }
@@ -110,7 +142,7 @@ export function getFestivalSignals(): Signal[] {
         suggestedAction: "Push 'fresh start' messaging with new arrivals",
         confidence: 0.80,
         expiresAt: expiresIn(120),
-        data: { festival, daysSince },
+        data: { festival, daysSince, fashionData: getFestivalFashionData(festival.name) },
         detectedAt: today,
       });
     }

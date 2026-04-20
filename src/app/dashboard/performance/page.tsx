@@ -1,369 +1,358 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-  BarChart3,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-  Eye,
-  DollarSign,
-  Users,
-  Target,
-  Layers,
-  GitBranch,
-  Crown,
-  Briefcase,
-  ShoppingBag,
-  Sparkles,
+  RefreshCw, Loader2, AlertTriangle, TrendingUp, TrendingDown,
+  DollarSign, Eye, MousePointerClick, ShoppingBag, Target,
+  ArrowUpRight, ArrowDownRight, BarChart3, Filter, Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
-interface ChannelPerformance {
-  channel: string;
-  platform: string;
+interface Campaign {
+  campaignId: string;
+  campaignName: string;
   spend: number;
-  grossRevenue: number;
-  grossRoas: number;
-  returns: number;
-  netRevenue: number;
-  netRoas: number;
-  haloRevenue: number;
-  trueCpa: number;
-}
-
-interface BrandHalo {
-  brand: string;
-  directRevenue: number;
-  haloRevenue: number;
-  haloPercent: number;
-  topHaloCategories: string[];
-}
-
-interface ArchetypePerf {
-  name: string;
-  icon: React.ElementType;
-  color: string;
-  spend: number;
-  revenue: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  purchases: number;
+  addToCarts: number;
+  viewContent: number;
   roas: number;
   cpa: number;
-  conversionRate: number;
-  avgOrderValue: number;
-  returnRate: number;
 }
 
-const channelData: ChannelPerformance[] = [
-  { channel: "Meta ASC", platform: "Meta", spend: 820000, grossRevenue: 4100000, grossRoas: 5.0, returns: 492000, netRevenue: 3608000, netRoas: 4.4, haloRevenue: 340000, trueCpa: 3200 },
-  { channel: "Meta Retarget", platform: "Meta", spend: 210000, grossRevenue: 2520000, grossRoas: 12.0, returns: 226800, netRevenue: 2293200, netRoas: 10.9, haloRevenue: 180000, trueCpa: 1800 },
-  { channel: "Google PMax", platform: "Google", spend: 450000, grossRevenue: 1800000, grossRoas: 4.0, returns: 252000, netRevenue: 1548000, netRoas: 3.4, haloRevenue: 420000, trueCpa: 4100 },
-  { channel: "Google Brand", platform: "Google", spend: 180000, grossRevenue: 3420000, grossRoas: 19.0, returns: 136800, netRevenue: 3283200, netRoas: 18.2, haloRevenue: 0, trueCpa: 480 },
-  { channel: "Google Demand Gen", platform: "Google", spend: 120000, grossRevenue: 168000, grossRoas: 1.4, returns: 33600, netRevenue: 134400, netRoas: 1.1, haloRevenue: 86000, trueCpa: 8200 },
-  { channel: "WhatsApp Commerce", platform: "WhatsApp", spend: 45000, grossRevenue: 580000, grossRoas: 12.9, returns: 29000, netRevenue: 551000, netRoas: 12.2, haloRevenue: 64000, trueCpa: 1200 },
-  { channel: "Email / SMS", platform: "Email", spend: 18000, grossRevenue: 420000, grossRoas: 23.3, returns: 37800, netRevenue: 382200, netRoas: 21.2, haloRevenue: 48000, trueCpa: 320 },
-];
+interface ApiResponse {
+  account: string;
+  summary: {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    cpc: number;
+    purchases: number;
+    addToCarts: number;
+    viewContent: number;
+    initiateCheckout: number;
+    roas: number;
+    cpa: number;
+    period: string;
+  };
+  campaigns: Campaign[];
+  insights: {
+    topPerformers: Campaign[];
+    worstPerformers: Campaign[];
+    highSpendLowReturn: Campaign[];
+    lowSpendHighReturn: Campaign[];
+    signals: string[];
+  };
+}
 
-const brandHaloData: BrandHalo[] = [
-  { brand: "Ami Paris", directRevenue: 2400000, haloRevenue: 680000, haloPercent: 28.3, topHaloCategories: ["Bags", "Shoes", "Accessories"] },
-  { brand: "Hugo Boss", directRevenue: 3200000, haloRevenue: 420000, haloPercent: 13.1, topHaloCategories: ["Polos", "Chinos", "Belts"] },
-  { brand: "Kenzo", directRevenue: 1800000, haloRevenue: 540000, haloPercent: 30.0, topHaloCategories: ["T-Shirts", "Accessories", "Bags"] },
-  { brand: "Michael Kors", directRevenue: 2100000, haloRevenue: 280000, haloPercent: 13.3, topHaloCategories: ["Bags", "Wallets", "Watches"] },
-  { brand: "Coach", directRevenue: 1600000, haloRevenue: 320000, haloPercent: 20.0, topHaloCategories: ["Bags", "Small Leather", "Shoes"] },
-];
+function formatCurrency(value: number): string {
+  if (value >= 10000000) return "₹" + (value / 10000000).toFixed(2) + " Cr";
+  if (value >= 100000) return "₹" + (value / 100000).toFixed(2) + " L";
+  if (value >= 1000) return "₹" + (value / 1000).toFixed(1) + "K";
+  return "₹" + value.toFixed(0);
+}
 
-const archetypePerf: ArchetypePerf[] = [
-  { name: "Fashion Loyalist", icon: Crown, color: "purple", spend: 680000, revenue: 4200000, roas: 6.2, cpa: 2800, conversionRate: 4.8, avgOrderValue: 18400, returnRate: 8 },
-  { name: "Urban Achiever", icon: Briefcase, color: "blue", spend: 520000, revenue: 2800000, roas: 5.4, cpa: 3600, conversionRate: 3.2, avgOrderValue: 12600, returnRate: 14 },
-  { name: "Splurger", icon: ShoppingBag, color: "orange", spend: 280000, revenue: 1680000, roas: 6.0, cpa: 4200, conversionRate: 2.1, avgOrderValue: 42800, returnRate: 22 },
-  { name: "Aspirant", icon: Sparkles, color: "green", spend: 360000, revenue: 1200000, roas: 3.3, cpa: 5400, conversionRate: 1.8, avgOrderValue: 6200, returnRate: 18 },
-];
+function formatNumber(value: number): string {
+  if (value >= 10000000) return (value / 10000000).toFixed(1) + " Cr";
+  if (value >= 100000) return (value / 100000).toFixed(1) + " L";
+  if (value >= 1000) return (value / 1000).toFixed(1) + "K";
+  return value.toString();
+}
 
-const attributionData = [
-  { touchpoint: "Social Discovery (Meta)", weight: 32, avgDaysBeforePurchase: 8 },
-  { touchpoint: "Brand Search (Google)", weight: 24, avgDaysBeforePurchase: 2 },
-  { touchpoint: "Retarget Ad (Meta)", weight: 18, avgDaysBeforePurchase: 3 },
-  { touchpoint: "Email / SMS", weight: 12, avgDaysBeforePurchase: 1 },
-  { touchpoint: "WhatsApp Message", weight: 8, avgDaysBeforePurchase: 0 },
-  { touchpoint: "Direct / Organic", weight: 6, avgDaysBeforePurchase: 0 },
-];
-
-function formatInr(amount: number): string {
-  if (amount >= 10000000) return `INR ${(amount / 10000000).toFixed(1)}Cr`;
-  if (amount >= 100000) return `INR ${(amount / 100000).toFixed(1)}L`;
-  if (amount >= 1000) return `INR ${(amount / 1000).toFixed(1)}K`;
-  return `INR ${amount.toLocaleString("en-IN")}`;
+function RoasBadge({ roas }: { roas: number }) {
+  return (
+    <span className={cn("text-xs font-bold px-2 py-0.5 rounded-full",
+      roas >= 15 ? "bg-emerald-100 text-emerald-700" :
+      roas >= 5 ? "bg-green-100 text-green-700" :
+      roas >= 3 ? "bg-yellow-100 text-yellow-700" :
+      roas >= 1 ? "bg-orange-100 text-orange-700" :
+      "bg-red-100 text-red-700"
+    )}>
+      {roas.toFixed(1)}x
+    </span>
+  );
 }
 
 export default function PerformancePage() {
-  const [activeTab, setActiveTab] = useState<"roas" | "halo" | "archetypes" | "attribution">("roas");
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [period, setPeriod] = useState("last_30d");
+  const [view, setView] = useState<"overview" | "top" | "worst" | "opportunities">("overview");
+  const [platform, setPlatform] = useState<"meta" | "google">("meta");
+  const [googleData, setGoogleData] = useState<any>(null);
 
-  const totalSpend = channelData.reduce((s, c) => s + c.spend, 0);
-  const totalGrossRevenue = channelData.reduce((s, c) => s + c.grossRevenue, 0);
-  const totalNetRevenue = channelData.reduce((s, c) => s + c.netRevenue, 0);
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (platform === "meta") {
+        const res = await fetch(`/api/ajio-luxe/performance?period=${period}&limit=50`);
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        setData(d);
+      } else {
+        const res = await fetch(`/api/ajio-luxe/google-performance?limit=100`);
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        const d = await res.json();
+        if (d.error) throw new Error(d.error);
+        // Normalize Google data to same shape as Meta
+        setData({
+          account: "AJIO LUXE",
+          summary: {
+            spend: d.summary.totalSpend,
+            impressions: d.summary.totalImpressions,
+            clicks: d.summary.totalClicks,
+            ctr: d.summary.avgCTR,
+            cpc: d.summary.avgCPC,
+            purchases: d.summary.totalConversions,
+            addToCarts: 0,
+            viewContent: 0,
+            initiateCheckout: 0,
+            roas: d.summary.overallROAS,
+            cpa: d.summary.overallCPA,
+            period: "All Time",
+          },
+          campaigns: d.campaigns,
+          insights: {
+            topPerformers: d.insights.topPerformers,
+            worstPerformers: d.insights.worstPerformers,
+            highSpendLowReturn: d.insights.highSpendLowReturn,
+            lowSpendHighReturn: d.insights.lowSpendHighReturn,
+            signals: [
+              `${d.summary.totalCampaigns} campaigns analyzed across all time`,
+              d.insights.highSpendLowReturn.length > 0 ? `${d.insights.highSpendLowReturn.length} campaigns with high spend but ROAS < 1x` : "",
+              d.insights.lowSpendHighReturn.length > 0 ? `${d.insights.lowSpendHighReturn.length} campaigns with ROAS > 10x — scale opportunities` : "",
+            ].filter(Boolean),
+          },
+        });
+        setGoogleData(d);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [period, platform]);
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <Loader2 size={32} className="animate-spin text-brand-blue mx-auto mb-4" />
+          <p className="text-sm text-muted">Fetching Ajio Luxe performance data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[60vh]">
+        <div className="text-center">
+          <AlertTriangle size={32} className="text-red-500 mx-auto mb-4" />
+          <p className="text-sm text-red-600 font-medium mb-2">Failed to load performance data</p>
+          <p className="text-xs text-muted mb-4">{error}</p>
+          <button onClick={fetchData} className="btn-secondary"><RefreshCw size={14} /> Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { summary, campaigns, insights } = data;
+
+  const displayCampaigns = view === "top" ? insights.topPerformers :
+    view === "worst" ? insights.worstPerformers :
+    view === "opportunities" ? insights.lowSpendHighReturn :
+    campaigns;
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Performance Lab</h1>
-          <p className="text-sm text-muted mt-1">
-            True performance metrics: Net ROAS, brand halo effects, archetype-level analysis, and multi-touch attribution.
-          </p>
+          <h1 className="text-2xl font-bold">Ajio Luxe — Ad Performance</h1>
+          <p className="text-sm text-muted mt-1">Historical performance from Ajio Luxe Meta Ads account</p>
         </div>
-        <select className="border rounded-lg px-3 py-2 text-sm">
-          <option>Last 7 days</option>
-          <option>Last 30 days</option>
-          <option>This month</option>
-          <option>Last quarter</option>
-        </select>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center border border-card-border rounded-lg overflow-hidden">
+            <button onClick={() => setPlatform("meta")}
+              className={cn("text-xs px-3 py-1.5 transition-colors font-medium",
+                platform === "meta" ? "bg-blue-600 text-white" : "bg-surface text-muted hover:bg-card-border"
+              )}>
+              Meta Ads
+            </button>
+            <button onClick={() => setPlatform("google")}
+              className={cn("text-xs px-3 py-1.5 transition-colors font-medium border-l border-card-border",
+                platform === "google" ? "bg-green-600 text-white" : "bg-surface text-muted hover:bg-card-border"
+              )}>
+              Google Ads
+            </button>
+          </div>
+          {platform === "meta" && (
+            <div className="flex items-center border border-card-border rounded-lg overflow-hidden">
+              {[
+                { key: "last_7d", label: "7D" },
+                { key: "last_30d", label: "30D" },
+                { key: "last_90d", label: "90D" },
+                { key: "maximum", label: "All" },
+              ].map(p => (
+                <button key={p.key} onClick={() => setPeriod(p.key)}
+                  className={cn("text-xs px-3 py-1.5 transition-colors",
+                    period === p.key ? "bg-brand-blue text-white" : "bg-surface text-muted hover:bg-card-border"
+                  )}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {platform === "google" && (
+            <span className="text-[10px] text-muted bg-surface px-2 py-1 rounded">All Time (10 years)</span>
+          )}
+          <button onClick={fetchData} className="btn-secondary"><RefreshCw size={14} /></button>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-5 gap-4">
-        <div className="stat-card stat-card-navy">
-          <p className="text-xs text-muted font-medium">Total Spend</p>
-          <p className="text-2xl font-bold mt-1">{formatInr(totalSpend)}</p>
+      {/* Account Summary */}
+      <div className="grid grid-cols-6 gap-3">
+        <div className="stat-card stat-card-purple">
+          <p className="text-[10px] text-muted font-medium">Total Spend</p>
+          <p className="text-xl font-bold mt-1">{formatCurrency(summary.spend)}</p>
         </div>
         <div className="stat-card stat-card-blue">
-          <p className="text-xs text-muted font-medium">Gross Revenue</p>
-          <p className="text-2xl font-bold mt-1">{formatInr(totalGrossRevenue)}</p>
+          <p className="text-[10px] text-muted font-medium">Impressions</p>
+          <p className="text-xl font-bold mt-1">{formatNumber(summary.impressions)}</p>
         </div>
         <div className="stat-card stat-card-green">
-          <p className="text-xs text-muted font-medium">Net Revenue</p>
-          <p className="text-2xl font-bold mt-1">{formatInr(totalNetRevenue)}</p>
+          <p className="text-[10px] text-muted font-medium">Purchases</p>
+          <p className="text-xl font-bold mt-1">{formatNumber(summary.purchases)}</p>
         </div>
-        <div className="stat-card stat-card-purple">
-          <p className="text-xs text-muted font-medium">Blended Net ROAS</p>
-          <p className="text-2xl font-bold mt-1">{(totalNetRevenue / totalSpend).toFixed(1)}x</p>
+        <div className={cn("stat-card", summary.roas >= 5 ? "stat-card-green" : summary.roas >= 3 ? "stat-card-yellow" : "stat-card-red")}>
+          <p className="text-[10px] text-muted font-medium">ROAS</p>
+          <p className="text-xl font-bold mt-1">{summary.roas.toFixed(1)}x</p>
         </div>
         <div className="stat-card stat-card-orange">
-          <p className="text-xs text-muted font-medium">Halo Revenue</p>
-          <p className="text-2xl font-bold mt-1">{formatInr(channelData.reduce((s, c) => s + c.haloRevenue, 0))}</p>
+          <p className="text-[10px] text-muted font-medium">CPA (Purchase)</p>
+          <p className="text-xl font-bold mt-1">{formatCurrency(summary.cpa)}</p>
+        </div>
+        <div className="stat-card stat-card-blue">
+          <p className="text-[10px] text-muted font-medium">CTR</p>
+          <p className="text-xl font-bold mt-1">{summary.ctr.toFixed(2)}%</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b">
-        {([
-          { key: "roas", label: "Net vs Gross ROAS" },
-          { key: "halo", label: "Brand Halo" },
-          { key: "archetypes", label: "Archetype Performance" },
-          { key: "attribution", label: "Multi-Touch Attribution" },
-        ] as const).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-              activeTab === tab.key
-                ? "border-brand-blue text-brand-blue"
-                : "border-transparent text-muted hover:text-text"
+      {/* Funnel */}
+      <div className="glass-card p-5">
+        <h3 className="font-semibold text-sm mb-3">Conversion Funnel</h3>
+        <div className="flex items-center gap-2">
+          {[
+            { label: "Impressions", value: summary.impressions, color: "bg-blue-500" },
+            { label: "Clicks", value: summary.clicks, color: "bg-indigo-500" },
+            { label: "View Content", value: summary.viewContent, color: "bg-purple-500" },
+            { label: "Add to Cart", value: summary.addToCarts, color: "bg-pink-500" },
+            { label: "Checkout", value: summary.initiateCheckout, color: "bg-orange-500" },
+            { label: "Purchase", value: summary.purchases, color: "bg-green-500" },
+          ].map((step, i, arr) => {
+            const prevValue = i > 0 ? arr[i - 1].value : step.value;
+            const convRate = prevValue > 0 ? ((step.value / prevValue) * 100).toFixed(1) : "0";
+            return (
+              <div key={step.label} className="flex-1 text-center">
+                <div className={cn("h-2 rounded-full mb-2", step.color)} style={{ opacity: 1 - (i * 0.12) }} />
+                <p className="text-lg font-bold">{formatNumber(step.value)}</p>
+                <p className="text-[10px] text-muted">{step.label}</p>
+                {i > 0 && <p className="text-[9px] text-muted mt-0.5">{convRate}% conv</p>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Signals from Ad Data */}
+      {insights.signals.length > 0 && (
+        <div className="glass-card p-5 border-l-4 border-brand-blue">
+          <h3 className="font-semibold text-sm mb-2 flex items-center gap-2"><BarChart3 size={14} className="text-brand-blue" /> Signals from Ad Data</h3>
+          <ul className="space-y-1">
+            {insights.signals.map((signal, i) => (
+              <li key={i} className="text-xs text-text-secondary flex items-start gap-2">
+                <ArrowUpRight size={12} className="text-brand-blue shrink-0 mt-0.5" />
+                {signal}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* View Tabs */}
+      <div className="flex gap-2 items-center">
+        {[
+          { key: "overview", label: "All Campaigns", icon: BarChart3 },
+          { key: "top", label: "Top Performers", icon: TrendingUp },
+          { key: "worst", label: "Underperformers", icon: TrendingDown },
+          { key: "opportunities", label: "Scale Opportunities", icon: ArrowUpRight },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setView(tab.key as any)}
+            className={cn("text-xs px-3 py-1.5 rounded-full transition-colors flex items-center gap-1",
+              view === tab.key ? "bg-brand-blue text-white" : "bg-surface text-muted hover:bg-card-border"
+            )}>
+            <tab.icon size={12} /> {tab.label}
+            {tab.key !== "overview" && (
+              <span className="bg-white/20 px-1.5 rounded-full text-[10px]">
+                {tab.key === "top" ? insights.topPerformers.length :
+                 tab.key === "worst" ? insights.worstPerformers.length :
+                 insights.lowSpendHighReturn.length}
+              </span>
             )}
-          >
-            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* Net vs Gross ROAS */}
-      {activeTab === "roas" && (
-        <div className="glass-card p-6">
-          <h3 className="font-semibold mb-4">Channel ROAS Comparison: Gross vs Net</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pb-3 font-medium text-muted">Channel</th>
-                <th className="pb-3 font-medium text-muted">Platform</th>
-                <th className="pb-3 font-medium text-muted">Spend</th>
-                <th className="pb-3 font-medium text-muted">Gross Revenue</th>
-                <th className="pb-3 font-medium text-muted">Gross ROAS</th>
-                <th className="pb-3 font-medium text-muted">Returns</th>
-                <th className="pb-3 font-medium text-muted">Net Revenue</th>
-                <th className="pb-3 font-medium text-muted">Net ROAS</th>
-                <th className="pb-3 font-medium text-muted">Halo</th>
-                <th className="pb-3 font-medium text-muted">True CPA</th>
+      {/* Campaign Table */}
+      <div className="glass-card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left bg-surface/50">
+              <th className="p-3 font-medium text-muted text-xs">Campaign</th>
+              <th className="p-3 font-medium text-muted text-xs text-right">Spend</th>
+              <th className="p-3 font-medium text-muted text-xs text-right">Impressions</th>
+              <th className="p-3 font-medium text-muted text-xs text-right">Clicks</th>
+              <th className="p-3 font-medium text-muted text-xs text-right">CTR</th>
+              <th className="p-3 font-medium text-muted text-xs text-right">Purchases</th>
+              <th className="p-3 font-medium text-muted text-xs text-right">CPA</th>
+              <th className="p-3 font-medium text-muted text-xs text-right">ROAS</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {displayCampaigns.map((c) => (
+              <tr key={c.campaignId} className="hover:bg-surface/30 transition-colors">
+                <td className="p-3">
+                  <p className="font-medium text-xs truncate max-w-[300px]">{c.campaignName}</p>
+                </td>
+                <td className="p-3 text-right text-xs">{formatCurrency(c.spend)}</td>
+                <td className="p-3 text-right text-xs">{formatNumber(c.impressions)}</td>
+                <td className="p-3 text-right text-xs">{formatNumber(c.clicks)}</td>
+                <td className="p-3 text-right text-xs">{c.ctr.toFixed(2)}%</td>
+                <td className="p-3 text-right text-xs font-medium">{formatNumber(c.purchases)}</td>
+                <td className="p-3 text-right text-xs">{c.cpa > 0 ? formatCurrency(c.cpa) : "—"}</td>
+                <td className="p-3 text-right"><RoasBadge roas={c.roas} /></td>
               </tr>
-            </thead>
-            <tbody className="divide-y">
-              {channelData.map((ch) => (
-                <tr key={ch.channel} className="hover:bg-gray-50">
-                  <td className="py-3 font-medium">{ch.channel}</td>
-                  <td className="py-3 text-muted">{ch.platform}</td>
-                  <td className="py-3">{formatInr(ch.spend)}</td>
-                  <td className="py-3">{formatInr(ch.grossRevenue)}</td>
-                  <td className="py-3">
-                    <span className={cn("font-medium", ch.grossRoas >= 5 ? "text-green-600" : ch.grossRoas >= 3 ? "text-blue-600" : "text-orange-600")}>
-                      {ch.grossRoas.toFixed(1)}x
-                    </span>
-                  </td>
-                  <td className="py-3 text-red-500">{formatInr(ch.returns)}</td>
-                  <td className="py-3 font-medium">{formatInr(ch.netRevenue)}</td>
-                  <td className="py-3">
-                    <span className={cn("font-bold", ch.netRoas >= 5 ? "text-green-600" : ch.netRoas >= 3 ? "text-blue-600" : "text-orange-600")}>
-                      {ch.netRoas.toFixed(1)}x
-                    </span>
-                  </td>
-                  <td className="py-3 text-purple-600">{formatInr(ch.haloRevenue)}</td>
-                  <td className="py-3">{formatInr(ch.trueCpa)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 font-bold">
-                <td className="py-3">Total</td>
-                <td className="py-3"></td>
-                <td className="py-3">{formatInr(totalSpend)}</td>
-                <td className="py-3">{formatInr(totalGrossRevenue)}</td>
-                <td className="py-3">{(totalGrossRevenue / totalSpend).toFixed(1)}x</td>
-                <td className="py-3 text-red-500">{formatInr(channelData.reduce((s, c) => s + c.returns, 0))}</td>
-                <td className="py-3">{formatInr(totalNetRevenue)}</td>
-                <td className="py-3">{(totalNetRevenue / totalSpend).toFixed(1)}x</td>
-                <td className="py-3 text-purple-600">{formatInr(channelData.reduce((s, c) => s + c.haloRevenue, 0))}</td>
-                <td className="py-3">—</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-
-      {/* Brand Halo */}
-      {activeTab === "halo" && (
-        <div className="space-y-4">
-          <div className="glass-card p-6">
-            <h3 className="font-semibold mb-4">Brand Halo Analysis</h3>
-            <p className="text-sm text-muted mb-4">
-              Halo revenue = additional purchases made in the same session or within 7 days of viewing a brand ad, but for different categories.
-            </p>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-3 font-medium text-muted">Brand</th>
-                  <th className="pb-3 font-medium text-muted">Direct Revenue</th>
-                  <th className="pb-3 font-medium text-muted">Halo Revenue</th>
-                  <th className="pb-3 font-medium text-muted">Halo %</th>
-                  <th className="pb-3 font-medium text-muted">Top Halo Categories</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {brandHaloData.map((brand) => (
-                  <tr key={brand.brand} className="hover:bg-gray-50">
-                    <td className="py-3 font-medium">{brand.brand}</td>
-                    <td className="py-3">{formatInr(brand.directRevenue)}</td>
-                    <td className="py-3 text-purple-600 font-medium">{formatInr(brand.haloRevenue)}</td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${brand.haloPercent}%` }} />
-                        </div>
-                        <span className="text-xs font-medium">{brand.haloPercent}%</span>
-                      </div>
-                    </td>
-                    <td className="py-3">
-                      <div className="flex gap-1">
-                        {brand.topHaloCategories.map((cat) => (
-                          <span key={cat} className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">{cat}</span>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Archetype Performance */}
-      {activeTab === "archetypes" && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {archetypePerf.map((arch) => {
-              const Icon = arch.icon;
-              return (
-                <div key={arch.name} className="glass-card p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className={`p-2.5 rounded-xl bg-brand-${arch.color}/10`}>
-                      <Icon size={22} className={`text-brand-${arch.color}`} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">{arch.name}</h3>
-                      <p className="text-xs text-muted">Performance breakdown</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-4 gap-3">
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">Spend</p>
-                      <p className="text-sm font-bold">{formatInr(arch.spend)}</p>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">Revenue</p>
-                      <p className="text-sm font-bold">{formatInr(arch.revenue)}</p>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">ROAS</p>
-                      <p className={cn("text-sm font-bold", arch.roas >= 5 ? "text-green-600" : "text-blue-600")}>{arch.roas}x</p>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">CPA</p>
-                      <p className="text-sm font-bold">{formatInr(arch.cpa)}</p>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">Conv. Rate</p>
-                      <p className="text-sm font-bold">{arch.conversionRate}%</p>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">Avg AOV</p>
-                      <p className="text-sm font-bold">{formatInr(arch.avgOrderValue)}</p>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">Return Rate</p>
-                      <p className="text-sm font-bold text-red-500">{arch.returnRate}%</p>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <p className="text-[10px] text-muted uppercase">Net ROAS</p>
-                      <p className="text-sm font-bold text-green-600">{(arch.roas * (1 - arch.returnRate / 100)).toFixed(1)}x</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Multi-Touch Attribution */}
-      {activeTab === "attribution" && (
-        <div className="glass-card p-6">
-          <h3 className="font-semibold mb-2">Multi-Touch Attribution Model</h3>
-          <p className="text-sm text-muted mb-6">Data-driven attribution showing the weighted contribution of each touchpoint in the customer journey.</p>
-          <div className="space-y-4">
-            {attributionData.map((touch) => (
-              <div key={touch.touchpoint} className="flex items-center gap-4">
-                <span className="text-sm font-medium w-48 shrink-0">{touch.touchpoint}</span>
-                <div className="flex-1 h-8 bg-gray-100 rounded-lg overflow-hidden relative">
-                  <div
-                    className="h-full bg-brand-blue rounded-lg flex items-center justify-end pr-3 transition-all"
-                    style={{ width: `${touch.weight}%` }}
-                  >
-                    {touch.weight >= 15 && <span className="text-xs font-bold text-white">{touch.weight}%</span>}
-                  </div>
-                  {touch.weight < 15 && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-medium">{touch.weight}%</span>}
-                </div>
-                <span className="text-xs text-muted w-24 text-right shrink-0">
-                  ~{touch.avgDaysBeforePurchase}d before purchase
-                </span>
-              </div>
             ))}
-          </div>
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm font-medium text-blue-800">Key Insight</p>
-            <p className="text-xs text-blue-600 mt-1">
-              Social Discovery (Meta) initiates 32% of all conversion paths, averaging 8 days before purchase. Brand Search captures high-intent users 2 days before conversion, making it critical for closing. WhatsApp Commerce has the shortest path (same day) and highest conversion rate.
-            </p>
-          </div>
-        </div>
-      )}
+          </tbody>
+        </table>
+        {displayCampaigns.length === 0 && (
+          <div className="p-8 text-center text-sm text-muted">No campaigns match this filter</div>
+        )}
+      </div>
     </div>
   );
 }

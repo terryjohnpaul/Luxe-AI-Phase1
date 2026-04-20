@@ -5,3 +5,10 @@ node_modules/
 *.tsbuildinfo
 next-env.d.ts
 .cache/
+data/
+*.bak
+*.broken
+*.txt
+product-feedback.json
+scraped-products.json
+bootstrap_flywheel.py

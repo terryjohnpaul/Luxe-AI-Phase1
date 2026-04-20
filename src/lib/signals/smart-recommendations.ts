@@ -10,6 +10,16 @@
 
 import { Signal } from "./types";
 
+// === ENHANCEMENT: Data-validated budget multipliers (from Rs 144 Cr analysis) ===
+const BUDGET_MULTIPLIERS_VALIDATED: Record<string, number> = {
+  sale_always_on: 4.0, sunday: 1.45, saturday: 1.25, thursday: 1.15,
+  friday: 1.05, monday: 1.00, wednesday: 0.89, tuesday: 0.80,
+  payday: 1.30, quarter_start: 2.50, week_2: 1.27,
+  january: 1.35, march: 1.20, december: 1.40,
+  april: 0.70, august: 0.65, diwali_day: 0.40, pre_diwali: 3.00,
+};
+
+
 // ============================================================
 // 1. HYPER-LOCAL CITY TARGETING
 // ============================================================

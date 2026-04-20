@@ -119,6 +119,10 @@ export class MetaAdsClient {
   }
 
   async createCampaign(params: MetaCampaignParams) {
+    // SAFETY: Block writes on Ajio Luxe client account
+    if (this.adAccountId === process.env.AJIO_LUXE_META_ACCOUNT_ID) {
+      throw new Error("BLOCKED: Write operations not allowed on Ajio Luxe client account.");
+    }
     return this.request(`/act_${this.adAccountId}/campaigns`, "POST", {
       name: params.name,
       objective: params.objective,
@@ -133,6 +137,10 @@ export class MetaAdsClient {
     campaignId: string,
     updates: Record<string, unknown>
   ) {
+    // SAFETY: Block writes on Ajio Luxe client account
+    if (this.adAccountId === process.env.AJIO_LUXE_META_ACCOUNT_ID) {
+      throw new Error("BLOCKED: Write operations not allowed on Ajio Luxe client account.");
+    }
     return this.request(`/${campaignId}`, "POST", updates);
   }
 
@@ -226,6 +234,10 @@ export class MetaAdsClient {
   // ============================================================
 
   async createCustomAudience(name: string, description?: string) {
+    // SAFETY: Block writes on Ajio Luxe client account
+    if (this.adAccountId === process.env.AJIO_LUXE_META_ACCOUNT_ID) {
+      throw new Error("BLOCKED: Write operations not allowed on Ajio Luxe client account.");
+    }
     return this.request(
       `/act_${this.adAccountId}/customaudiences`,
       "POST",
@@ -243,6 +255,10 @@ export class MetaAdsClient {
     hashedData: string[][],
     schema: string[]
   ) {
+    // SAFETY: Block writes on Ajio Luxe client account
+    if (this.adAccountId === process.env.AJIO_LUXE_META_ACCOUNT_ID) {
+      throw new Error("BLOCKED: Write operations not allowed on Ajio Luxe client account.");
+    }
     const sessionId = Date.now();
     const batchSize = 10000;
 
@@ -338,6 +354,191 @@ export class MetaAdsClient {
     return this.request(`/act_${this.adAccountId}/advideos`, "GET", {
       fields: "id,title,status,source",
     });
+  }
+
+  // ============================================================
+  // BREAKDOWNS, LEVELS & ATTRIBUTION
+  // ============================================================
+
+  /**
+   * Get account insights broken down by a dimension.
+   * Supported: 'age', 'gender', 'publisher_platform',
+   *   'publisher_platform,platform_position', 'device_platform',
+   *   'region', 'hourly_stats_aggregated_by_advertiser_time_zone'
+   */
+  async getInsightsWithBreakdown(breakdown: string, datePreset = 'last_7d') {
+    try {
+      return await this.getAccountInsights({
+        datePreset,
+        breakdowns: breakdown.split(',').map((b) => b.trim()),
+        fields: [
+          'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+          'actions', 'action_values', 'purchase_roas', 'frequency',
+          'reach', 'cost_per_action_type',
+        ],
+      });
+    } catch (error: any) {
+      console.error(`[MetaAds] getInsightsWithBreakdown(${breakdown}) failed:`, error?.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get insights at individual ad level with creative metrics.
+   */
+  async getAdLevelInsights(datePreset = 'last_7d') {
+    try {
+      return await this.getAccountInsights({
+        datePreset,
+        level: 'ad',
+        fields: [
+          'ad_name', 'ad_id', 'adset_name', 'campaign_name',
+          'spend', 'impressions', 'clicks', 'ctr',
+          'actions', 'action_values', 'purchase_roas', 'frequency',
+        ],
+      });
+    } catch (error: any) {
+      console.error('[MetaAds] getAdLevelInsights failed:', error?.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get insights at any level (campaign / adset / ad).
+   * Eliminates N+1 query pattern by fetching all entities at once.
+   */
+  async getInsightsAtLevel(level: 'campaign' | 'adset' | 'ad' = 'campaign', datePreset = 'last_7d') {
+    try {
+      const fieldsByLevel: Record<string, string[]> = {
+        campaign: [
+          'campaign_name', 'campaign_id', 'objective',
+          'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+          'actions', 'action_values', 'purchase_roas', 'frequency', 'reach',
+        ],
+        adset: [
+          'adset_name', 'adset_id', 'campaign_name', 'campaign_id',
+          'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+          'actions', 'action_values', 'purchase_roas', 'frequency', 'reach',
+        ],
+        ad: [
+          'ad_name', 'ad_id', 'adset_name', 'adset_id', 'campaign_name', 'campaign_id',
+          'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+          'actions', 'action_values', 'purchase_roas', 'frequency',
+        ],
+      };
+      return await this.getAccountInsights({
+        datePreset,
+        level,
+        fields: fieldsByLevel[level],
+      });
+    } catch (error: any) {
+      console.error(`[MetaAds] getInsightsAtLevel(${level}) failed:`, error?.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // CUSTOM AUDIENCES (Read)
+  // ============================================================
+
+  /**
+   * Fetch custom audiences for the ad account.
+   * Returns audience metadata including approximate sizes and delivery status.
+   */
+  async getCustomAudiences(limit = 200) {
+    try {
+      return await this.request(
+        `/act_${this.adAccountId}/customaudiences`,
+        'GET',
+        {
+          fields: [
+            'id', 'name', 'subtype',
+            'approximate_count_lower_bound', 'approximate_count_upper_bound',
+            'data_source', 'delivery_status', 'time_updated',
+          ].join(','),
+          limit: String(limit),
+        }
+      );
+    } catch (error: any) {
+      console.error('[MetaAds] getCustomAudiences failed:', error?.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // DAILY TRENDS & ATTRIBUTION
+  // ============================================================
+
+  /**
+   * Get day-by-day insights (time_increment=1) for trend analysis.
+   */
+  async getDailyTrend(datePreset = 'last_30d') {
+    try {
+      return await this.getAccountInsights({
+        datePreset,
+        timeIncrement: '1',
+        fields: [
+          'spend', 'impressions', 'clicks', 'ctr', 'cpc', 'cpm',
+          'actions', 'action_values', 'purchase_roas',
+          'frequency', 'reach',
+        ],
+      });
+    } catch (error: any) {
+      console.error('[MetaAds] getDailyTrend failed:', error?.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Compare metrics across attribution windows (1d click, 7d click, 1d view).
+   */
+  async getAttributionComparison(datePreset = 'last_7d') {
+    try {
+      const queryParams: Record<string, string> = {
+        fields: [
+          'spend', 'impressions', 'clicks', 'ctr',
+          'actions', 'action_values', 'purchase_roas',
+          'cost_per_action_type',
+        ].join(','),
+        date_preset: datePreset,
+        action_attribution_windows: JSON.stringify(['1d_click', '7d_click', '1d_view']),
+      };
+      return await this.request(
+        `/act_${this.adAccountId}/insights`,
+        'GET',
+        queryParams
+      );
+    } catch (error: any) {
+      console.error('[MetaAds] getAttributionComparison failed:', error?.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // TOKEN MANAGEMENT
+  // ============================================================
+
+  /**
+   * Validate the current access token. Returns validity, expiry, and scopes.
+   */
+  async validateToken(): Promise<{ valid: boolean; expiresAt?: Date; scopes?: string[] }> {
+    try {
+      const response = await this.request('/debug_token', 'GET', {
+        input_token: this.accessToken,
+      });
+      const data = response?.data;
+      if (!data) {
+        return { valid: false };
+      }
+      return {
+        valid: data.is_valid ?? false,
+        expiresAt: data.expires_at ? new Date(data.expires_at * 1000) : undefined,
+        scopes: data.scopes ?? [],
+      };
+    } catch (error: any) {
+      console.error('[MetaAds] validateToken failed:', error?.message);
+      return { valid: false };
+    }
   }
 }
 

@@ -51,7 +51,19 @@ export type SignalCategory =
   | "aesthetic"
   | "runway"
   | "launch"
-  | "category_demand";
+  | "category_demand"
+  | "daypart"
+  | "consumer_calendar"
+  | "sale_dynamics"
+  | "demographic"
+  | "geo_index"
+  | "brand_demand"
+  | "content_truth"
+  | "competitive_landscape"
+  | "placement_rule"
+  | "funnel_benchmark"
+  | "festival_fashion"
+  | "compound_signal";
 
 export interface SignalSourceConfig {
   name: string;

@@ -258,6 +258,312 @@ export class GoogleAdsClient {
       WHERE user_list.type = 'CRM_BASED'
     `);
   }
+
+  // ============================================================
+  // DEVICE, GEO & TIME BREAKDOWNS
+  // ============================================================
+
+  async getCampaignsByDevice(dateRange = 'LAST_30_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          segments.device,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value
+        FROM campaign
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getCampaignsByDevice failed:', error?.message);
+      throw error;
+    }
+  }
+
+  async getCampaignsByGeo(dateRange = 'LAST_30_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          geographic_view.country_criterion_id,
+          geographic_view.location_type,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value
+        FROM geographic_view
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getCampaignsByGeo failed:', error?.message);
+      throw error;
+    }
+  }
+
+  async getCampaignsByHour(dateRange = 'LAST_30_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          segments.hour,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value
+        FROM campaign
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getCampaignsByHour failed:', error?.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // DEMOGRAPHIC BREAKDOWNS
+  // ============================================================
+
+  async getCampaignsByAge(dateRange = 'LAST_30_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          ad_group.id,
+          ad_group.name,
+          age_range_view.resource_name,
+          ad_group_criterion.age_range.type,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value
+        FROM age_range_view
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getCampaignsByAge failed:', error?.message);
+      throw error;
+    }
+  }
+
+  async getCampaignsByGender(dateRange = 'LAST_30_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          ad_group.id,
+          ad_group.name,
+          gender_view.resource_name,
+          ad_group_criterion.gender.type,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value
+        FROM gender_view
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getCampaignsByGender failed:', error?.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // SEARCH TERMS & SHOPPING
+  // ============================================================
+
+  async getSearchTerms(dateRange = 'LAST_7_DAYS', limit = 500) {
+    try {
+      return await this.customer.query(`
+        SELECT
+          search_term_view.search_term,
+          search_term_view.status,
+          campaign.id,
+          campaign.name,
+          ad_group.id,
+          ad_group.name,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value,
+          metrics.ctr,
+          metrics.average_cpc
+        FROM search_term_view
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+        ORDER BY metrics.impressions DESC
+        LIMIT ${limit}
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getSearchTerms failed:', error?.message);
+      throw error;
+    }
+  }
+
+  async getShoppingByBrand(dateRange = 'LAST_30_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          segments.product_brand,
+          segments.product_type_l1,
+          campaign.id,
+          campaign.name,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value,
+          metrics.ctr
+        FROM shopping_performance_view
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+        ORDER BY metrics.conversions_value DESC
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getShoppingByBrand failed:', error?.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // KEYWORD QUALITY & BUDGET
+  // ============================================================
+
+  async getKeywordQualityScores() {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          ad_group.id,
+          ad_group.name,
+          ad_group_criterion.keyword.text,
+          ad_group_criterion.keyword.match_type,
+          ad_group_criterion.quality_info.quality_score,
+          ad_group_criterion.quality_info.creative_quality_score,
+          ad_group_criterion.quality_info.search_predicted_ctr,
+          ad_group_criterion.quality_info.post_click_quality_score,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions
+        FROM keyword_view
+        WHERE campaign.status = 'ENABLED'
+          AND ad_group.status = 'ENABLED'
+          AND ad_group_criterion.status = 'ENABLED'
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getKeywordQualityScores failed:', error?.message);
+      throw error;
+    }
+  }
+
+  async getBudgetRecommendations() {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          campaign.status,
+          campaign_budget.amount_micros,
+          campaign_budget.total_amount_micros,
+          campaign_budget.recommended_budget_amount_micros,
+          campaign_budget.recommended_budget_estimated_change_weekly_clicks,
+          campaign_budget.recommended_budget_estimated_change_weekly_cost_micros,
+          campaign_budget.recommended_budget_estimated_change_weekly_interactions,
+          campaign_budget.recommended_budget_estimated_change_weekly_views,
+          campaign_budget.delivery_method,
+          metrics.cost_micros,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.conversions
+        FROM campaign
+        WHERE campaign.status = 'ENABLED'
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getBudgetRecommendations failed:', error?.message);
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // IMPRESSION SHARE & ASSET PERFORMANCE
+  // ============================================================
+
+  async getImpressionShareDetails(dateRange = 'LAST_7_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          metrics.search_impression_share,
+          metrics.search_budget_lost_impression_share,
+          metrics.search_rank_lost_impression_share,
+          metrics.content_impression_share,
+          metrics.content_budget_lost_impression_share,
+          metrics.content_rank_lost_impression_share,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions
+        FROM campaign
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getImpressionShareDetails failed:', error?.message);
+      throw error;
+    }
+  }
+
+  async getAssetPerformance(dateRange = 'LAST_30_DAYS') {
+    try {
+      return await this.customer.query(`
+        SELECT
+          campaign.id,
+          campaign.name,
+          ad_group.id,
+          ad_group.name,
+          ad_group_asset.asset,
+          ad_group_asset.field_type,
+          ad_group_asset.performance_label,
+          ad_group_asset.status,
+          asset.name,
+          asset.type,
+          asset.text_asset.text,
+          asset.image_asset.full_size.url,
+          metrics.impressions,
+          metrics.clicks,
+          metrics.cost_micros,
+          metrics.conversions,
+          metrics.conversions_value
+        FROM ad_group_asset
+        WHERE campaign.status = 'ENABLED'
+          AND segments.date DURING ${dateRange}
+        ORDER BY metrics.impressions DESC
+      `);
+    } catch (error: any) {
+      console.error('[GoogleAds] getAssetPerformance failed:', error?.message);
+      throw error;
+    }
+  }
 }
 
 // Helper: Convert micros to currency (INR)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Settings,
   Link,
@@ -64,15 +64,9 @@ interface NotificationPref {
   push: boolean;
 }
 
-const mockAccounts: ConnectedAccount[] = [
-  { id: "a1", platform: "Meta Ads", accountName: "Luxe Fashion India", type: "Advertising", status: "connected", lastSync: "2 min ago", permissions: ["Ads Management", "Insights", "Pages"] },
-  { id: "a2", platform: "Meta Commerce", accountName: "Luxe Fashion Catalog", type: "Product Catalog", status: "connected", lastSync: "5 min ago", permissions: ["Catalog Management", "Product Feed"] },
-  { id: "a3", platform: "Google Ads", accountName: "Luxe Fashion — 123-456-7890", type: "Advertising", status: "connected", lastSync: "3 min ago", permissions: ["Campaign Management", "Reporting"] },
-  { id: "a4", platform: "Google Analytics 4", accountName: "luxefashion.in", type: "Analytics", status: "connected", lastSync: "1 min ago", permissions: ["Read", "Data Export"] },
-  { id: "a5", platform: "Google Merchant Center", accountName: "Luxe Fashion India", type: "Product Feed", status: "connected", lastSync: "10 min ago", permissions: ["Products", "Feed Management"] },
-  { id: "a6", platform: "WhatsApp Business", accountName: "+91 98765 43210", type: "Messaging", status: "connected", lastSync: "Just now", permissions: ["Send Messages", "Templates", "Media"] },
-  { id: "a7", platform: "Shopify", accountName: "luxefashion.myshopify.com", type: "E-commerce", status: "connected", lastSync: "1 min ago", permissions: ["Orders", "Products", "Customers"] },
-  { id: "a8", platform: "Klaviyo", accountName: "Luxe Fashion", type: "Email / SMS", status: "error", lastSync: "2 hours ago", permissions: ["Lists", "Flows", "Campaigns"] },
+const CONNECTABLE_ACCOUNTS = [
+  { id: "google-ads", platform: "Google Ads", type: "Advertising", authUrl: "/api/auth/google-ads", permissions: ["Campaign Management", "Reporting", "Budget Control"] },
+  { id: "meta-ads", platform: "Meta Ads", type: "Advertising", authUrl: "/api/auth/meta-ads", permissions: ["Ads Management", "Insights", "Audiences"] },
 ];
 
 const mockApiKeys: ApiKey[] = [
@@ -138,6 +132,29 @@ export default function SettingsPage() {
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
   const [profile, setProfile] = useState<BusinessProfile>(getStoredProfile);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [adConnection, setAdConnection] = useState<any>(null);
+  const [connectionLoading, setConnectionLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/ads/push-draft")
+      .then(r => r.json())
+      .then(data => { setAdConnection(data); setConnectionLoading(false); })
+      .catch(() => setConnectionLoading(false));
+  }, []);
+
+  const getConnectionStatus = (platformId: string): boolean => {
+    if (!adConnection) return false;
+    if (platformId === "google-ads") return !!adConnection.google?.connected;
+    if (platformId === "meta-ads") return !!adConnection.meta?.connected;
+    return false;
+  };
+
+  const getAccountName = (platformId: string): string => {
+    if (!adConnection) return "Not connected";
+    if (platformId === "google-ads") return adConnection.google?.connected ? "SharozDawa — " + (adConnection.google?.customerId || "864-160-4012") : "Not connected";
+    if (platformId === "meta-ads") return adConnection.meta?.connected ? "Luxe AI Ads — " + (adConnection.meta?.adAccountId || "") : "Not connected";
+    return "Not connected";
+  };
 
   const saveProfile = (updated: BusinessProfile) => {
     setProfile(updated);
@@ -351,45 +368,66 @@ export default function SettingsPage() {
       {activeTab === "accounts" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted">{mockAccounts.filter(a => a.status === "connected").length} of {mockAccounts.length} accounts connected</p>
-            <button className="btn-primary"><Plus size={14} /> Connect Account</button>
+            <p className="text-sm text-muted">
+              {connectionLoading ? "Checking connections..." :
+                CONNECTABLE_ACCOUNTS.filter(a => getConnectionStatus(a.id)).length + " of " + CONNECTABLE_ACCOUNTS.length + " ad accounts connected"
+              }
+            </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {mockAccounts.map((account) => (
-              <div key={account.id} className="glass-card p-5">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold">{account.platform}</h3>
-                      <span className={cn(
-                        "text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1",
-                        account.status === "connected" && "bg-green-100 text-green-700",
-                        account.status === "error" && "bg-red-100 text-red-700",
-                        account.status === "expired" && "bg-yellow-100 text-yellow-700",
-                      )}>
-                        {account.status === "connected" && <><Check size={8} /> Connected</>}
-                        {account.status === "error" && <><X size={8} /> Error</>}
-                        {account.status === "expired" && "Expired"}
-                      </span>
+            {CONNECTABLE_ACCOUNTS.map((account) => {
+              const isConnected = getConnectionStatus(account.id);
+              return (
+                <div key={account.id} className={cn("glass-card p-5", isConnected && "ring-1 ring-green-200")}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{account.platform}</h3>
+                        <span className={cn(
+                          "text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1",
+                          isConnected ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500",
+                        )}>
+                          {isConnected ? <><Check size={8} /> Connected</> : "Not connected"}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted mt-0.5">{getAccountName(account.id)}</p>
                     </div>
-                    <p className="text-sm text-muted mt-0.5">{account.accountName}</p>
+                    <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded">{account.type}</span>
                   </div>
-                  <span className="text-[10px] bg-gray-100 px-2 py-0.5 rounded">{account.type}</span>
-                </div>
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {account.permissions.map((perm) => (
-                    <span key={perm} className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{perm}</span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-muted">Last sync: {account.lastSync}</span>
-                  <div className="flex gap-1">
-                    <button className="p-1.5 rounded-md hover:bg-gray-100" title="Refresh"><RefreshCw size={12} className="text-muted" /></button>
-                    {account.status === "error" && <button className="btn-approve text-xs">Reconnect</button>}
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {account.permissions.map((perm) => (
+                      <span key={perm} className={cn("text-[10px] px-2 py-0.5 rounded-full", isConnected ? "bg-blue-50 text-blue-700" : "bg-gray-50 text-gray-400")}>{perm}</span>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted">{isConnected ? "OAuth connected" : "Click to connect via OAuth"}</span>
+                    <div className="flex gap-1">
+                      {isConnected ? (
+                        <button onClick={() => { window.location.href = account.authUrl; }} className="btn-secondary text-xs flex items-center gap-1">
+                          <RefreshCw size={12} /> Reconnect
+                        </button>
+                      ) : (
+                        <button onClick={() => { window.location.href = account.authUrl; }} className="btn-primary text-xs flex items-center gap-1">
+                          <ExternalLink size={12} /> Connect {account.platform}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
+          </div>
+
+          {/* Connection help */}
+          <div className="glass-card p-5">
+            <h3 className="font-semibold text-sm mb-2">How it works</h3>
+            <ol className="text-xs text-muted space-y-1.5 list-decimal list-inside">
+              <li>Click <strong>Connect</strong> on the platform you want to link</li>
+              <li>You will be redirected to Google/Meta to authorize access</li>
+              <li>Grant the requested permissions</li>
+              <li>You will be redirected back — the token is saved automatically</li>
+              <li>Go to <strong>Command Center</strong> and click <strong>Push to Draft</strong> on any recommendation</li>
+            </ol>
           </div>
         </div>
       )}

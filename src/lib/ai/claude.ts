@@ -1,7 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "",
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "",
 });
 
 interface ClaudeResponse {
@@ -34,20 +34,20 @@ export async function askClaude(
   prompt: string,
   options?: { maxTokens?: number; temperature?: number }
 ): Promise<ClaudeResponse> {
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-5-20250514",
+  const response = await client.chat.completions.create({
+    model: "gpt-4o",
     max_tokens: options?.maxTokens || 4096,
     temperature: options?.temperature || 0.3,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
   });
 
-  const textContent = response.content.find((c) => c.type === "text");
-
   return {
-    text: textContent?.text || "",
-    inputTokens: response.usage.input_tokens,
-    outputTokens: response.usage.output_tokens,
+    text: response.choices[0]?.message?.content || "",
+    inputTokens: response.usage?.prompt_tokens || 0,
+    outputTokens: response.usage?.completion_tokens || 0,
   };
 }
 
@@ -59,10 +59,9 @@ export async function askClaudeStructured<T>(
     temperature: 0.1,
   });
 
-  // Extract JSON from response (handle potential markdown wrapping)
   let jsonStr = response.text.trim();
-  if (jsonStr.startsWith("```")) {
-    jsonStr = jsonStr.replace(/```json?\n?/g, "").replace(/```$/g, "").trim();
+  if (jsonStr.startsWith("\`\`\`")) {
+    jsonStr = jsonStr.replace(/\`\`\`json?\n?/g, "").replace(/\`\`\`$/g, "").trim();
   }
 
   const data = parseResponse(jsonStr);

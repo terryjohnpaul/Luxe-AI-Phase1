@@ -41,7 +41,7 @@ const SIGNAL_TYPE_BENCHMARKS: Record<string, { baseCTR: number; baseConvRate: nu
   travel:       { baseCTR: 0.8, baseConvRate: 0.35, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "Travel-occasion buying — destination/resort wear" },
   regional:     { baseCTR: 0.85, baseConvRate: 0.45, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "Geo-targeted regional relevance" },
   gift_occasion:{ baseCTR: 0.9, baseConvRate: 0.6, engagementMultiplier: 1.05, intentLevel: "high",  liftNote: "Gift buyers have specific budget + deadline — high conversion intent" },
-  sale_event:   { baseCTR: 1.2, baseConvRate: 0.8, engagementMultiplier: 1.2, intentLevel: "high",   liftNote: "Platform sale events drive 3-5x conversion lift (Ajio internal benchmarks)" },
+  sale_event:   { baseCTR: 1.2, baseConvRate: 0.5, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "CAUTION: Dedicated sale campaigns = 0.02x Google, 3.2x Meta. Always-on during sales = 42.51x Meta. Scale always-on, not dedicated." },
   occasion_dressing: { baseCTR: 0.85, baseConvRate: 0.6, engagementMultiplier: 1.0, intentLevel: "high", liftNote: "Occasion-specific search = must-buy intent (interview, wedding guest, date night)" },
   fashion_event: { baseCTR: 1.1, baseConvRate: 0.5, engagementMultiplier: 1.15, intentLevel: "high", liftNote: "Fashion week/award shows drive +100-300% luxury search spikes. Peak attention window." },
   wedding:       { baseCTR: 0.9, baseConvRate: 0.7, engagementMultiplier: 1.1, intentLevel: "high", liftNote: "Muhurat-dense wedding windows drive 3-5x luxury demand. Must-buy intent." },
@@ -49,6 +49,19 @@ const SIGNAL_TYPE_BENCHMARKS: Record<string, { baseCTR: number; baseConvRate: nu
   runway:        { baseCTR: 0.8, baseConvRate: 0.3, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "Runway-to-retail trend — 3-6 month demand wave starting. Early-mover advantage." },
   launch:        { baseCTR: 1.0, baseConvRate: 0.55, engagementMultiplier: 1.15, intentLevel: "high", liftNote: "Launch week = peak organic search. Paid ads during launch get 2-3x ROAS." },
   category_demand: { baseCTR: 0.85, baseConvRate: 0.45, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "Category-level demand shift. Reallocate budget to surging categories." },
+  // === NEW: Calibrated from Rs 144 Cr ad spend analysis (Apr 2026) ===
+  daypart:            { baseCTR: 1.72, baseConvRate: 0.58, engagementMultiplier: 1.0, intentLevel: "high",   liftNote: "Time-of-day efficiency from 10yr data. Meta 11PM CPA 47% of avg. Google 6AM CPA 62% of avg." },
+  consumer_calendar:  { baseCTR: 1.72, baseConvRate: 0.58, engagementMultiplier: 1.0, intentLevel: "high",   liftNote: "Monthly efficiency from 10yr data. Dec CPA 71% of avg. Apr CPA 125% of avg." },
+  sale_dynamics:      { baseCTR: 1.5, baseConvRate: 0.7, engagementMultiplier: 1.2, intentLevel: "high",    liftNote: "Sale behavioral physics. Always-on during sales: 42.51x Meta ROAS. Dedicated: 3.2x." },
+  demographic:        { baseCTR: 1.72, baseConvRate: 0.58, engagementMultiplier: 1.0, intentLevel: "high",   liftNote: "F25-34 universal buyer 23.2% conv rate. M35-44 goldmine 16.67x ROAS. Calibrated from live data." },
+  geo_index:          { baseCTR: 1.72, baseConvRate: 0.58, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "Karnataka CPA index 0.33 (best). Delhi 1.0 (worst metro). Tier-2 21-31% cheaper." },
+  brand_demand:       { baseCTR: 1.0, baseConvRate: 0.5, engagementMultiplier: 1.1, intentLevel: "high",    liftNote: "Brand ROAS tiers from data: Onitsuka 41.88x, Marc Jacobs 28x, IndianWear 38.43x." },
+  content_truth:      { baseCTR: 1.72, baseConvRate: 0.58, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "Luxury messaging 2.5x over discount. 10-11s video sweet spot. Brand pages 13x CTR." },
+  competitive_landscape: { baseCTR: 0.9, baseConvRate: 0.4, engagementMultiplier: 1.0, intentLevel: "medium", liftNote: "Ajio 13.98% IS. TataCLiQ Position Above 48.47%. Farfetch conquest 70%+ conv." },
+  placement_rule:     { baseCTR: 1.72, baseConvRate: 0.58, engagementMultiplier: 1.0, intentLevel: "high",   liftNote: "Reels 7.45x vs Stories 3.47x. Facebook 12.25x vs Instagram 5.15x. Android 9.52x vs iPhone 3.60x." },
+  funnel_benchmark:   { baseCTR: 1.72, baseConvRate: 0.58, engagementMultiplier: 1.0, intentLevel: "high",   liftNote: "67% LPV drop. 93% cart abandonment. 93.7% checkout completion. 43.7% view-through." },
+  festival_fashion:   { baseCTR: 1.1, baseConvRate: 0.7, engagementMultiplier: 1.15, intentLevel: "high",   liftNote: "Festival-to-fashion mapping: Navratri 9 colors, Durga Puja sarees, Onam kasavu." },
+  compound_signal:    { baseCTR: 1.5, baseConvRate: 0.8, engagementMultiplier: 1.2, intentLevel: "high",    liftNote: "Multi-dimensional compound: 4-5 signals aligning = highest confidence predictions." },
 };
 
 // Severity adds a mild boost, not a massive multiplier — prevents unrealistic compounding
@@ -109,11 +122,11 @@ function buildPrediction(signal: Signal, tiers: BrandTier[]) {
   const tierReachMult = isLuxuryOnly ? 0.7 : isAccessibleOnly ? 1.3 : 1.0;
   const tierConvMult = isLuxuryOnly ? 0.85 : isAccessibleOnly ? 1.15 : 1.0;
   // AOV: Luxury fashion India ₹5K-12K, Tata CLiQ Luxury ₹8K-18K, Myntra premium ₹3K-7K (RedSeer 2024)
-  const tierAOV = isLuxuryOnly ? 12000 : isAccessibleOnly ? 3500 : 7000;
+  const tierAOV = isLuxuryOnly ? 3235 : isAccessibleOnly ? 2649 : 3000; // Calibrated from live Meta API (was 12000/3500/7000 generic)
 
   // CPM: luxury fashion India is ₹250-400 on Meta, ₹150-250 on Google Display
   // Blended CPM accounts for Meta-heavy split
-  const cpm = isLuxuryOnly ? 380 : isAccessibleOnly ? 180 : 280;
+  const cpm = isLuxuryOnly ? 21.20 : isAccessibleOnly ? 19.31 : 21.20; // Calibrated from live Meta API (was 380/180/280 generic)
   const dailyBudget = parseBudgetMid(getBudgetForSignal(signal));
   const durationDays = signal.type === "cricket" ? 1 :
                        signal.type === "celebrity" ? 4 :
@@ -125,15 +138,53 @@ function buildPrediction(signal: Signal, tiers: BrandTier[]) {
   // Only apply engagement multiplier to impressions (not severity — that affects CTR/conv separately)
   const impressions = Math.round(baseImpressions * bench.engagementMultiplier * tierReachMult);
 
+  // === MULTI-FACTOR MULTIPLIERS (from Rs 144 Cr data analysis) ===
+  // Each factor adjusts the prediction based on actual proven performance data
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentDay = now.getDay();
+  const currentMonth = now.getMonth();
+  
+  // Time-of-day multiplier (Meta: 11PM cheapest, 6AM most expensive)
+  const hourMultiplier = (currentHour >= 21 || currentHour <= 1) ? 1.3 : // Meta golden window
+                         (currentHour >= 5 && currentHour <= 9) ? 0.7 :   // Meta expensive, Google cheap
+                         1.0;
+  
+  // Day-of-week multiplier
+  const dayMultiplier = currentDay === 0 ? 1.45 :  // Sunday best
+                        currentDay === 4 ? 1.15 :    // Thursday efficient
+                        currentDay === 2 ? 0.85 :    // Tuesday worst
+                        currentDay === 3 ? 0.89 :    // Wednesday
+                        1.0;
+  
+  // Monthly multiplier  
+  const monthMultiplier = [1.35, 0.95, 1.20, 0.70, 0.85, 0.80, 1.05, 0.65, 0.85, 1.40, 0.85, 1.40][currentMonth];
+  // Jan=1.35, Apr=0.70, Aug=0.65, Oct=1.40(pre-Diwali), Dec=1.40
+  
+  // Category multiplier (if signal mentions specific categories)
+  const signalData = JSON.stringify(signal.data || {}).toLowerCase();
+  const categoryMultiplier = signalData.includes("indian_wear") || signalData.includes("indian wear") ? 1.8 :
+                             signalData.includes("sneaker") || signalData.includes("onitsuka") ? 1.6 :
+                             signalData.includes("home") || signalData.includes("dinnerware") ? 1.5 :
+                             signalData.includes("eyewear") ? 1.3 :
+                             signalData.includes("watch") ? 1.2 :
+                             signalData.includes("perfume") ? 1.1 :
+                             1.0;
+  
+  // Compound multiplier (capped at 3x to prevent unrealistic predictions)
+  const dataMultiplier = Math.min(3.0, Math.max(0.3, 
+    hourMultiplier * dayMultiplier * Math.sqrt(monthMultiplier) * Math.sqrt(categoryMultiplier)
+  ));
+
   // CTR — apply severity OR confidence boost, not both compounding
   // Use the stronger of the two as primary, the other as a mild modifier
   const signalBoost = Math.max(severityMult, confidenceMult);
   const signalMinor = Math.min(severityMult, confidenceMult);
-  const ctr = bench.baseCTR * signalBoost * (1 + (signalMinor - 1) * 0.3); // mild secondary effect
+  const ctr = bench.baseCTR * signalBoost * (1 + (signalMinor - 1) * 0.3) * dataMultiplier; // mild secondary effect
   const clicks = Math.round(impressions * (ctr / 100));
 
   // Conversion rate — same anti-compounding logic
-  const convRate = bench.baseConvRate * signalBoost * tierConvMult;
+  const convRate = bench.baseConvRate * signalBoost * tierConvMult * Math.sqrt(dataMultiplier);
   const conversions = Math.round(clicks * (convRate / 100));
 
   // ROAS = (conversions × AOV) / totalBudget
@@ -146,6 +197,10 @@ function buildPrediction(signal: Signal, tiers: BrandTier[]) {
 
   // Build reasoning factors — explain WHY we predict these numbers
   const factors: string[] = [];
+
+  // Multi-factor context
+  if (dataMultiplier > 1.2) factors.push(`Data multiplier: ${dataMultiplier.toFixed(2)}x boost from time/day/month/category alignment`);
+  if (dataMultiplier < 0.8) factors.push(`Data multiplier: ${dataMultiplier.toFixed(2)}x — suboptimal timing reduces expected performance`);
 
   // Signal type context
   factors.push(bench.liftNote);
@@ -741,6 +796,82 @@ function getCachedSignals(): SignalCache | null {
   return signalCache;
 }
 
+
+// ============================================================
+// INDIA RELEVANCE FLAGS
+// Post-processes recommendations with India-specific relevance scoring
+// ============================================================
+
+function addIndiaRelevance(rec: any): any {
+  const title = (rec.title || "").toLowerCase();
+  const direction = (rec.creative?.direction || "").toLowerCase();
+  const signalType = rec.signalType || "";
+
+  let score: "high" | "medium" | "low" = "medium";
+  let note = "";
+
+  // HIGH relevance
+  if (title.includes("quiet luxury") || title.includes("quietluxury")) {
+    score = "high"; note = "Quiet Luxury: 61.1 search interest in India, fastest growing aesthetic trend";
+  } else if (title.includes("wedding") || signalType === "wedding" || signalType === "life_event") {
+    score = "high"; note = "Wedding season drives 30-60% uplift in luxury purchases across India";
+  } else if (title.includes("coach tabby") || (title.includes("coach") && direction.includes("bag"))) {
+    score = "high"; note = "Coach: 100x growth in India (2021-2026), #1 accessible luxury brand";
+  } else if (title.includes("old money") || title.includes("oldmoney")) {
+    score = "high"; note = "Old Money Aesthetic: 19.0 search interest, growing steadily in India";
+  } else if (signalType === "salary_cycle") {
+    score = "high"; note = "Appraisal season: 14-22% uplift in luxury shopping in India IT hubs";
+  } else if (direction.includes("fragrance") || direction.includes("perfume")) {
+    score = "high"; note = "Fragrances: #1 luxury product search in India, 20-25% CAGR growth";
+  } else if (title.includes("swarovski")) {
+    score = "high"; note = "Swarovski: highest searched accessories brand in India (49.6 avg interest)";
+  }
+  // Celebrity pairing confidence
+  else if ((title.includes("deepika") && title.includes("hugo boss")) || (title.includes("deepika") && direction.includes("boss"))) {
+    score = "high"; note = "Deepika is BOSS brand ambassador -- only celebrity pairing with organic search signal (2.3)";
+  } else if (title.includes("alia") && direction.includes("coach")) {
+    score = "high"; note = "Alia Bhatt + Coach: both have strongest independent search in India. Best ROI potential";
+  }
+  // MEDIUM relevance
+  else if (signalType === "competitor") {
+    score = "medium"; note = "Conquest campaign -- Ajio Luxe (11.7) vs Tata CLiQ Luxury (12.5) are neck-and-neck in India";
+  } else if (title.includes("versace") && direction.includes("sunglasses")) {
+    score = "medium"; note = "Versace sunglasses: 10.0 search interest. Moderate -- Ray-Ban dominates India sunglasses (47.5)";
+  } else if ((title.includes("hugo boss") && direction.includes("tailoring")) || direction.includes("suit")) {
+    score = "medium"; note = "Hugo Boss suits: Indians search Boss more for perfume and shirts than suits. Reframe to Boss wardrobe, not just suits";
+  } else if (title.includes("prada") && direction.includes("bag")) {
+    score = "medium"; note = "Prada bags: 2.6 avg search in India. Aspirational but low volume -- use for brand campaigns, not performance";
+  } else if (title.includes("coquette") || title.includes("bow era")) {
+    score = "medium"; note = "Coquette/Bow Era: 2.9 search interest in India. Very niche -- target fashion-forward women only";
+  } else if (title.includes("tomato girl")) {
+    score = "medium"; note = "Tomato Girl: 8.4 search interest. Seasonal summer only, moderate relevance";
+  } else if (signalType === "celebrity") {
+    score = "medium"; note = "Celebrity pairing has near-zero organic search in India -- ad will CREATE association, not amplify it. Test with small budget first";
+  }
+  // LOW relevance
+  else if (title.includes("mob wife")) {
+    score = "low"; note = "Mob Wife Aesthetic: ZERO search in India. Relabel as Bold Maximalist -- the leopard/gold aesthetic sells for Indian parties & weddings, but not under this Western label";
+  } else if (title.includes("butter yellow")) {
+    score = "low"; note = "Butter Yellow trend: ZERO search in India. Indians wear yellow for Haldi/Vasant Panchami -- route through festival signals, not trend signals";
+  } else if (title.includes("diesel 1dr") || (title.includes("diesel") && direction.includes("bag"))) {
+    score = "low"; note = "Diesel 1DR: ZERO search in India despite global buzz. Display/social ads can create demand, but do NOT run Google Search ads for this product";
+  } else if (title.includes("siddhant") && direction.includes("diesel")) {
+    score = "low"; note = "Siddhant + Diesel: weakest celebrity pairing -- both have very low search in India. Test with INR 10-15K/day max";
+  } else if (title.includes("sobhita") && direction.includes("max mara")) {
+    score = "low"; note = "Sobhita + Max Mara: Max Mara India search is 1.2 avg, Sobhita is too niche. Instagram-only play, not platform traffic driver";
+  } else if (title.includes("designer sneakers")) {
+    score = "low"; note = "Designer sneakers: 8.1 search in India. Luxury sneaker culture is 3-5 years behind the West -- early stage market";
+  }
+
+  // Jimmy Choo keyword guidance
+  if (rec.creative?.brands?.includes("Jimmy Choo") && signalType !== "wedding") {
+    if (!note) note = "";
+    note += " | Jimmy Choo: 54% of India searches are for 'Jimmy Choo fabric' (textile pattern). Use 'Jimmy Choo shoes/heels/bridal' as keywords, NOT just 'Jimmy Choo'";
+  }
+
+  return { ...rec, indiaRelevance: { score, note } };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category") || "all";
@@ -869,7 +1000,7 @@ export async function GET(request: Request) {
       return roasB - roasA;
     });
 
-    const recommendations = positiveROI;
+    const recommendations = positiveROI.map(addIndiaRelevance);
 
     // Persist signals + recommendations to DB for the learning flywheel (fire-and-forget)
     persistToFlywheel(signals, recommendations).catch(err =>

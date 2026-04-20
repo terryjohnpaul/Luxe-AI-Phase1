@@ -27,6 +27,8 @@ import {
   Brain,
   DollarSign,
   Target,
+  Package,
+  ClipboardCheck,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -37,6 +39,7 @@ const navigation = [
       { name: "Command Center", href: "/dashboard/command-center", icon: LayoutDashboard },
       { name: "Flywheel", href: "/dashboard/flywheel", icon: Brain },
       { name: "Optimization Engine", href: "/dashboard/optimization", icon: Zap },
+      { name: "Campaign Approval", href: "/dashboard/approval", icon: ClipboardCheck },
       { name: "Audiences", href: "/dashboard/audiences", icon: Users },
     ],
   },
@@ -44,9 +47,15 @@ const navigation = [
     label: "CREATIVE & CAMPAIGNS",
     items: [
       { name: "Creative Studio", href: "/dashboard/creative", icon: Palette },
-      { name: "Campaign Builder", href: "/dashboard/campaigns", icon: Rocket },
+      { name: "Campaigns", href: "/dashboard/campaigns", icon: Rocket },
       { name: "Wedding & Gifting", href: "/dashboard/wedding", icon: Heart },
       { name: "Retargeting", href: "/dashboard/retargeting", icon: GitBranch },
+    ],
+  },
+  {
+    label: "DATA",
+    items: [
+      { name: "Product Catalog", href: "/dashboard/catalog", icon: Package },
     ],
   },
   {

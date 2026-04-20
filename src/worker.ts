@@ -15,12 +15,14 @@ import {
   processSignal,
   processSync,
   processCreative,
+  processLearning,
 } from "./lib/queue/processor";
 import type {
   OptimizationJobData,
   SignalJobData,
   SyncJobData,
   CreativeJobData,
+  LearningJobData,
 } from "./lib/queue/setup";
 
 const connection = new IORedis(process.env.REDIS_URL || "redis://localhost:6379", {
@@ -130,6 +132,31 @@ creativeWorker.on("failed", (job, err) => {
   console.error(`[Worker] Creative job ${job?.name} failed:`, err.message);
 });
 
+
+// ============================================================
+// LEARNING WORKER (flywheel — predictions, drift, benchmarks)
+// ============================================================
+
+const learningWorker = new Worker<LearningJobData>(
+  "learning",
+  async (job) => {
+    console.log(`[Worker] Processing learning job: ${job.name} (${job.data.type})`);
+    return processLearning(job.data);
+  },
+  {
+    connection,
+    concurrency: 1,
+  }
+);
+
+learningWorker.on("completed", (job) => {
+  console.log(`[Worker] Learning job ${job.name} completed`);
+});
+
+learningWorker.on("failed", (job, err) => {
+  console.error(`[Worker] Learning job ${job?.name} failed:`, err.message);
+});
+
 // ============================================================
 // GRACEFUL SHUTDOWN
 // ============================================================
@@ -140,6 +167,7 @@ async function shutdown() {
   await signalWorker.close();
   await syncWorker.close();
   await creativeWorker.close();
+  await learningWorker.close();
   await connection.quit();
   console.log("[Worker] Shutdown complete.");
   process.exit(0);
@@ -149,4 +177,23 @@ process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
 console.log("[Worker] All workers started. Waiting for jobs...");
-console.log("[Worker] Queues: optimization, signals, sync, creative");
+console.log("[Worker] Queues: optimization, signals, sync, creative, learning");
+
+
+// ============================================================
+// STARTUP: Schedule recurring jobs
+// ============================================================
+(async () => {
+  try {
+    const { setupRecurringJobs, setupLearningJobs } = await import("./lib/queue/setup");
+    
+    // Setup jobs for Ajio Luxe org
+    await setupRecurringJobs("org_ajio_luxe");
+    console.log("[Worker] Recurring jobs scheduled for org_ajio_luxe");
+    
+    await setupLearningJobs();
+    console.log("[Worker] Learning jobs scheduled (daily predictions, weekly drift)");
+  } catch (e) {
+    console.error("[Worker] Failed to setup recurring jobs:", e);
+  }
+})();

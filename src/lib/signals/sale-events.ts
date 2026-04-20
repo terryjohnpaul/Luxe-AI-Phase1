@@ -18,6 +18,37 @@ interface SaleEvent {
   expectedLift: string;
   budgetMultiplier: number;
 }
+// === Data-Validated ROAS History from 144Cr Ad Spend Analysis ===
+const SALE_ROAS_HISTORY: Record<string, { always_on_roas: number; dedicated_roas: number; pre_buzz_days: number; cliff_drop_pct: number }> = {
+  'EOSS_JAN': { always_on_roas: 42.51, dedicated_roas: 3.2, pre_buzz_days: 2, cliff_drop_pct: 0.40 },
+  'REPUBLIC_DAY': { always_on_roas: 14.54, dedicated_roas: 3.0, pre_buzz_days: 2, cliff_drop_pct: 0.30 },
+  'VALENTINE': { always_on_roas: 12.0, dedicated_roas: 2.5, pre_buzz_days: 3, cliff_drop_pct: 0.25 },
+  'HOLI': { always_on_roas: 25.71, dedicated_roas: 3.0, pre_buzz_days: 2, cliff_drop_pct: 0.35 },
+  'MOTHERS_DAY': { always_on_roas: 33.16, dedicated_roas: 4.0, pre_buzz_days: 5, cliff_drop_pct: 0.30 },
+  'GST': { always_on_roas: 22.07, dedicated_roas: 3.5, pre_buzz_days: 2, cliff_drop_pct: 0.25 },
+  'EOSS_JUN': { always_on_roas: 38.0, dedicated_roas: 3.2, pre_buzz_days: 3, cliff_drop_pct: 0.45 },
+  'BBS': { always_on_roas: 16.89, dedicated_roas: 2.8, pre_buzz_days: 2, cliff_drop_pct: 0.40 },
+  'ALLSTAR': { always_on_roas: 28.0, dedicated_roas: 3.2, pre_buzz_days: 1, cliff_drop_pct: 0.48 },
+  'BFS': { always_on_roas: 20.0, dedicated_roas: 2.5, pre_buzz_days: 2, cliff_drop_pct: 0.35 },
+};
+
+// Map sale names to ROAS keys
+const SALE_TO_ROAS_KEY: Record<string, string> = {
+  'India Luxury EOSS — Summer': 'EOSS_JAN',
+  'India Luxury EOSS — Winter': 'EOSS_JUN',
+  'Republic Day Sale': 'REPUBLIC_DAY',
+  'Diwali Luxury Sale': 'BFS',
+  'India Luxury Big Brand Sale': 'BBS',
+  'New Season Drop — SS26': 'ALLSTAR',
+  'New Season Drop — FW26': 'ALLSTAR',
+  'Independence Day Sale': 'GST',
+};
+
+function getSaleRoasData(saleName: string) {
+  const key = SALE_TO_ROAS_KEY[saleName];
+  return key ? SALE_ROAS_HISTORY[key] : null;
+}
+
 
 const SALE_EVENTS_2026: SaleEvent[] = [
   {
@@ -136,7 +167,7 @@ export function getSaleEventSignals(): Signal[] {
         confidence: 0.95,
         suggestedAction: `${daysUntilStart} days to ${sale.name}. Set up campaigns NOW: ${sale.adStrategy}. Budget: ${sale.budgetMultiplier}x.`,
         expiresAt: startDate,
-        data: { sale: sale.name, type: sale.type, daysUntil: daysUntilStart, budgetMultiplier: sale.budgetMultiplier },
+        data: { sale: sale.name, type: sale.type, daysUntil: daysUntilStart, budgetMultiplier: sale.budgetMultiplier, roasHistory: getSaleRoasData(sale.name) },
         detectedAt: now,
       });
     }
@@ -157,7 +188,7 @@ export function getSaleEventSignals(): Signal[] {
         confidence: 0.99,
         suggestedAction: `SALE IS LIVE! Maximize spend at ${sale.budgetMultiplier}x. Push: ${sale.topBrands.join(", ")}. ${daysUntilEnd} days left.`,
         expiresAt: endDate,
-        data: { sale: sale.name, type: sale.type, daysRemaining: daysUntilEnd, budgetMultiplier: sale.budgetMultiplier },
+        data: { sale: sale.name, type: sale.type, daysRemaining: daysUntilEnd, budgetMultiplier: sale.budgetMultiplier, roasHistory: getSaleRoasData(sale.name) },
         detectedAt: now,
       });
     }

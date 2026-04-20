@@ -18,6 +18,31 @@ interface GiftOccasion {
   targetBuyer: string;
   urgencyDaysBefore: number;
 }
+// === Gifting ROAS & Demographic Targeting from 144Cr Ad Spend Analysis ===
+const GIFTING_ROAS_DATA: Record<string, { roas: number; buyer_demo: string; recipient_demo: string; categories: string[] }> = {
+  'mothers_day': { roas: 33.16, buyer_demo: 'Male 18-34', recipient_demo: 'Female 45+', categories: ['sarees', 'bags', 'perfume'] },
+  'valentines': { roas: 12.0, buyer_demo: 'Both 18-34', recipient_demo: 'Partner', categories: ['perfume', 'watches', 'bags', 'red_outfits'] },
+  'rakhi': { roas: 18.0, buyer_demo: 'Female 18-34', recipient_demo: 'Male 18-34', categories: ['watches', 'wallets', 'shoes'] },
+  'fathers_day': { roas: 15.0, buyer_demo: 'Both 18-34', recipient_demo: 'Male 45+', categories: ['watches', 'perfume', 'wallets'] },
+  'diwali_gifting': { roas: 20.0, buyer_demo: 'All', recipient_demo: 'All', categories: ['home', 'dinnerware', 'perfume', 'luxury_hampers'] },
+  'christmas': { roas: 16.0, buyer_demo: 'All 25-44', recipient_demo: 'All', categories: ['western_luxury', 'accessories', 'perfume'] },
+};
+
+// Map occasion names to GIFTING_ROAS_DATA keys
+const OCCASION_TO_ROAS_KEY: Record<string, string> = {
+  "Valentine's Day": 'valentines',
+  "Mother's Day": 'mothers_day',
+  "Father's Day": 'fathers_day',
+  'Raksha Bandhan': 'rakhi',
+  'Diwali Gifting': 'diwali_gifting',
+  'Christmas': 'christmas',
+};
+
+function getGiftingRoasData(occasionName: string) {
+  const key = OCCASION_TO_ROAS_KEY[occasionName];
+  return key ? GIFTING_ROAS_DATA[key] : null;
+}
+
 
 const GIFT_OCCASIONS_2026: GiftOccasion[] = [
   {
@@ -123,7 +148,7 @@ export function getGiftOccasionSignals(): Signal[] {
         confidence: 0.7,
         suggestedAction: `Run always-on gift ads: "Luxury gifts starting ₹3,000". Target "birthday gift ideas luxury" keywords. Push ${occasion.topGiftBrands.slice(0, 3).join(", ")} wallets and accessories on luxury retailers.`,
         expiresAt: expiresIn(720),
-        data: { occasion: occasion.name, budget: occasion.giftBudgetRange },
+        data: { occasion: occasion.name, budget: occasion.giftBudgetRange, giftingRoas: getGiftingRoasData(occasion.name) },
         detectedAt: now,
       });
       continue;
@@ -149,7 +174,7 @@ export function getGiftOccasionSignals(): Signal[] {
         confidence: 0.9,
         suggestedAction: `LAUNCH ${occasion.name} gift campaign NOW. ${daysUntil} days left. Push ${occasion.topGiftBrands.slice(0, 3).join(", ")} on luxury retailers. Target: ${occasion.targetBuyer}. Budget range: ${occasion.giftBudgetRange}.`,
         expiresAt: eventDate,
-        data: { occasion: occasion.name, daysUntil, recipient: occasion.recipient, budget: occasion.giftBudgetRange },
+        data: { occasion: occasion.name, daysUntil, recipient: occasion.recipient, budget: occasion.giftBudgetRange, giftingRoas: getGiftingRoasData(occasion.name) },
         detectedAt: now,
       });
     }

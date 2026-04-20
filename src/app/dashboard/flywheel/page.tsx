@@ -5,7 +5,7 @@ import {
   RefreshCw, Loader2, Brain, Zap, Database, Target, BarChart3,
   Activity, CheckCircle, XCircle, AlertTriangle, TrendingUp,
   TrendingDown, Minus, ArrowRight, Radio, Users, ShoppingBag,
-  Settings, Eye, Clock, Cpu, Layers, GitBranch,
+  Settings, Eye, Clock, Cpu, Layers, GitBranch, Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -69,6 +69,14 @@ interface FlywheelData {
     title: string;
     detail: string;
     timestamp: string;
+  }>;
+  insights: Array<{
+    text: string;
+    category: "performance" | "timing" | "audience" | "creative" | "budget";
+    impact: "high" | "medium" | "low";
+    metric: string;
+    learnedFrom: string;
+    learnedAt: string;
   }>;
 }
 
@@ -223,6 +231,47 @@ export default function FlywheelPage() {
           </div>
         ))}
       </div>
+
+      {/* What We've Learned */}
+      {d.insights && d.insights.length > 0 && (
+        <div className="glass-card p-4 mb-6">
+          <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Lightbulb size={16} className="text-amber-500" /> What We&apos;ve Learned
+          </h2>
+          <div className="grid grid-cols-2 gap-2">
+            {d.insights.map((insight, i) => (
+              <div key={i} className="p-3 bg-surface/60 rounded-lg border border-card-border/50">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <p className="text-xs leading-relaxed flex-1">{insight.text}</p>
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0",
+                    insight.impact === "high" ? "bg-emerald-100 text-emerald-700" :
+                    insight.impact === "medium" ? "bg-amber-100 text-amber-700" :
+                    "bg-gray-100 text-gray-600"
+                  )}>
+                    {insight.impact}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                    insight.category === "performance" ? "bg-blue-50 text-blue-600" :
+                    insight.category === "budget" ? "bg-purple-50 text-purple-600" :
+                    insight.category === "audience" ? "bg-pink-50 text-pink-600" :
+                    insight.category === "creative" ? "bg-orange-50 text-orange-600" :
+                    "bg-cyan-50 text-cyan-600"
+                  )}>
+                    {insight.category}
+                  </span>
+                  <span className="text-[10px] text-muted">
+                    Learned from {insight.learnedFrom}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-12 gap-6 mb-6">
         {/* Learning Models */}

@@ -1,184 +1,126 @@
 import { NextResponse } from "next/server";
+import { cachedFetch } from "@/lib/api-cache";
+
+const META_BASE = "https://graph.facebook.com/v25.0";
+
+function extractAction(actions: any[], type: string): number {
+  if (!actions) return 0;
+  const a = actions.find((x: any) => x.action_type === type);
+  return a ? parseInt(a.value) : 0;
+}
+
+function extractActionValue(values: any[], type: string): number {
+  if (!values) return 0;
+  const a = values.find((x: any) => x.action_type === type || x.action_type === "omni_purchase");
+  return a ? parseFloat(a.value) : 0;
+}
+
+async function fetchPerformanceData() {
+  const token = process.env.AJIO_LUXE_META_ACCESS_TOKEN;
+  const accountId = process.env.AJIO_LUXE_META_ACCOUNT_ID;
+  if (!token || !accountId) return null;
+
+  try {
+    const fields = "spend,impressions,reach,frequency,clicks,ctr,cpc,cpm,actions,action_values,purchase_roas,cost_per_action_type";
+
+    const [last7dResp, last30dResp, campaignResp] = await Promise.all([
+      fetch(`${META_BASE}/act_${accountId}/insights?fields=${fields}&date_preset=last_7d&access_token=${token}`),
+      fetch(`${META_BASE}/act_${accountId}/insights?fields=${fields}&date_preset=last_30d&access_token=${token}`),
+      fetch(`${META_BASE}/act_${accountId}/insights?fields=campaign_name,campaign_id,spend,actions,purchase_roas,frequency&level=campaign&date_preset=last_7d&limit=20&sort=spend_descending&access_token=${token}`),
+    ]);
+
+    const [last7d, last30d, campaigns] = await Promise.all([
+      last7dResp.json(), last30dResp.json(), campaignResp.json(),
+    ]);
+
+    const d7 = last7d.data?.[0];
+    const d30 = last30d.data?.[0];
+    if (!d7 || !d30) return null;
+
+    const parse = (d: any) => ({
+      spend: parseFloat(d.spend || "0"),
+      impressions: parseInt(d.impressions || "0"),
+      reach: parseInt(d.reach || "0"),
+      frequency: parseFloat(d.frequency || "0"),
+      clicks: parseInt(d.clicks || "0"),
+      ctr: parseFloat(d.ctr || "0"),
+      cpc: parseFloat(d.cpc || "0"),
+      cpm: parseFloat(d.cpm || "0"),
+      purchases: extractAction(d.actions, "purchase"),
+      revenue: extractActionValue(d.action_values, "omni_purchase"),
+      roas: d.purchase_roas?.[0]?.value ? parseFloat(d.purchase_roas[0].value) : 0,
+      addToCart: extractAction(d.actions, "add_to_cart"),
+      landingPageViews: extractAction(d.actions, "landing_page_view"),
+      viewContent: extractAction(d.actions, "view_content"),
+      initiateCheckout: extractAction(d.actions, "initiate_checkout"),
+      appInstalls: extractAction(d.actions, "mobile_app_install"),
+    });
+
+    const topCampaigns = (campaigns.data || []).map((c: any) => ({
+      name: c.campaign_name,
+      id: c.campaign_id,
+      spend: parseFloat(c.spend || "0"),
+      purchases: extractAction(c.actions, "purchase"),
+      roas: c.purchase_roas?.[0]?.value ? parseFloat(c.purchase_roas[0].value) : 0,
+      frequency: parseFloat(c.frequency || "0"),
+    }));
+
+    return {
+      last7d: parse(d7),
+      last30d: parse(d30),
+      topCampaigns,
+      funnel: {
+        impressions: parseInt(d7.impressions || "0"),
+        clicks: parseInt(d7.clicks || "0"),
+        landingPageViews: extractAction(d7.actions, "landing_page_view"),
+        viewContent: extractAction(d7.actions, "view_content"),
+        addToCart: extractAction(d7.actions, "add_to_cart"),
+        initiateCheckout: extractAction(d7.actions, "initiate_checkout"),
+        purchases: extractAction(d7.actions, "purchase"),
+      },
+    };
+  } catch (e) {
+    console.error("[performance] API error:", e);
+    return null;
+  }
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const period = searchParams.get("period") || "30d";
-  const brand = searchParams.get("brand");
+  const refresh = searchParams.get("refresh") === "true";
 
-  const _ = { period, brand }; // acknowledge params for future use
-  void _;
+  const { data, fetchedAt, fromCache } = await cachedFetch(
+    "meta-performance",
+    fetchPerformanceData,
+    refresh
+  );
 
-  const performanceData = {
-    period,
-    currency: "INR",
+  if (!data) {
+    return NextResponse.json({ error: "Failed to fetch performance data" }, { status: 500 });
+  }
 
-    // Net ROAS — the key differentiator (accounts for returns)
-    netRoas: {
-      current: 5.82,
-      previous: 5.14,
-      change: 13.2,
-      trend: "IMPROVING",
-      grossRoas: 7.1,
-      returnRate: 18.2,
-      returnCost: 142000, // INR lost to returns this period
-      byBrand: [
-        { brand: "Hugo Boss", grossRoas: 7.75, netRoas: 6.82, returnRate: 12.0 },
-        { brand: "Diesel", grossRoas: 13.6, netRoas: 10.88, returnRate: 20.0 },
-        { brand: "Kenzo", grossRoas: 5.24, netRoas: 3.93, returnRate: 25.0 },
-        { brand: "Ami Paris", grossRoas: 13.94, netRoas: 12.55, returnRate: 10.0 },
-        { brand: "Armani Exchange", grossRoas: 3.9, netRoas: 2.73, returnRate: 30.0 },
-      ],
+  const d7 = data.last7d;
+  const cpa = d7.purchases > 0 ? Math.round(d7.spend / d7.purchases) : 0;
+
+  return NextResponse.json({
+    summary: {
+      spend: d7.spend,
+      revenue: d7.revenue,
+      roas: d7.roas,
+      purchases: d7.purchases,
+      cpa,
+      impressions: d7.impressions,
+      reach: d7.reach,
+      frequency: d7.frequency,
+      ctr: d7.ctr,
     },
-
-    // Halo Analysis — measuring cross-brand and cross-channel impact
-    haloAnalysis: {
-      summary: "Meta awareness campaigns driving 23% of Google branded search conversions. Hugo Boss awareness spend generating halo lift for Diesel and Kenzo.",
-      crossChannelHalo: [
-        {
-          source: "Meta Awareness — Hugo Boss",
-          destination: "Google Brand Search — Hugo Boss",
-          attributedConversions: 14,
-          attributedRevenue: 58800,
-          haloLift: 23,
-        },
-        {
-          source: "Meta Awareness — Hugo Boss",
-          destination: "Direct / Organic — Diesel",
-          attributedConversions: 6,
-          attributedRevenue: 36000,
-          haloLift: 8,
-        },
-        {
-          source: "Google PMAX — Kenzo",
-          destination: "Meta Retarget — Kenzo",
-          attributedConversions: 4,
-          attributedRevenue: 16000,
-          haloLift: 12,
-        },
-      ],
-      brandHalo: [
-        {
-          primaryBrand: "Hugo Boss",
-          haloBrands: ["Diesel", "Ami Paris"],
-          crossSellRate: 18.5,
-          avgCrossSellValue: 8200,
-        },
-        {
-          primaryBrand: "Diesel",
-          haloBrands: ["Hugo Boss", "Kenzo"],
-          crossSellRate: 12.3,
-          avgCrossSellValue: 6400,
-        },
-      ],
+    comparison: {
+      last7d: data.last7d,
+      last30d: data.last30d,
     },
-
-    // Archetype Performance — how each customer segment performs
-    archetypePerformance: [
-      {
-        archetype: "FASHION_LOYALIST",
-        totalSpend: 186000,
-        totalRevenue: 1488000,
-        roas: 8.0,
-        netRoas: 7.12,
-        conversions: 248,
-        avgOrderValue: 6000,
-        returnRate: 11.0,
-        clvTrend: "GROWING",
-        topCampaigns: ["Diesel Fashion Loyalists Retarget", "Ami Paris Brand Search"],
-        insight: "Highest value segment. Respond best to editorial content and new arrivals. Minimal discount dependency — avoid promotional messaging.",
-      },
-      {
-        archetype: "URBAN_ACHIEVER",
-        totalSpend: 284000,
-        totalRevenue: 1562000,
-        roas: 5.5,
-        netRoas: 4.62,
-        conversions: 347,
-        avgOrderValue: 4500,
-        returnRate: 16.0,
-        clvTrend: "GROWING",
-        topCampaigns: ["Hugo Boss Urban Achievers ASC", "Diesel Demand Gen Video"],
-        insight: "Largest converting segment. Social proof and aspirational lifestyle content drives engagement. Tier 1B city expansion shows promise.",
-      },
-      {
-        archetype: "OCCASIONAL_SPLURGER",
-        totalSpend: 156000,
-        totalRevenue: 624000,
-        roas: 4.0,
-        netRoas: 3.0,
-        conversions: 120,
-        avgOrderValue: 5200,
-        returnRate: 25.0,
-        clvTrend: "STABLE",
-        topCampaigns: ["Hugo Boss Occasional Splurgers Awareness"],
-        insight: "High return rate inflating gross ROAS. Festive triggers (Holi, Diwali) spike conversions. Gift-wrapping messaging improves net value.",
-      },
-      {
-        archetype: "ASPIRANT",
-        totalSpend: 98000,
-        totalRevenue: 205800,
-        roas: 2.1,
-        netRoas: 1.47,
-        conversions: 49,
-        avgOrderValue: 4200,
-        returnRate: 30.0,
-        clvTrend: "EMERGING",
-        topCampaigns: ["Kenzo PMAX Tier 1 Cities"],
-        insight: "Highest return rate — sizing and expectation mismatch. Entry-level brands (Armani Exchange) work better as gateway. Size guide and video try-on reduce returns.",
-      },
-    ],
-
-    // Funnel Performance
-    funnelPerformance: [
-      {
-        stage: "AWARENESS",
-        spend: 108000,
-        impressions: 2100000,
-        reach: 840000,
-        frequency: 2.5,
-        videoViews: 420000,
-        brandLift: 12.5,
-      },
-      {
-        stage: "CONSIDERATION",
-        spend: 84000,
-        impressions: 950000,
-        clicks: 28500,
-        ctr: 3.0,
-        addToCart: 4200,
-        addToCartRate: 14.7,
-      },
-      {
-        stage: "CONVERSION",
-        spend: 468000,
-        impressions: 324000,
-        clicks: 12400,
-        conversions: 648,
-        conversionRate: 5.2,
-        revenue: 3024000,
-        roas: 6.46,
-      },
-      {
-        stage: "RETENTION",
-        spend: 64000,
-        impressions: 86000,
-        clicks: 4800,
-        conversions: 116,
-        repeatPurchaseRate: 28.4,
-        revenue: 856000,
-        roas: 13.38,
-      },
-    ],
-
-    // Top performing products
-    topProducts: [
-      { name: "Hugo Boss Classic Polo - Black", sku: "HB-POLO-BLK-2026", revenue: 168000, units: 40, roas: 9.2 },
-      { name: "Diesel 1DR Shoulder Bag", sku: "DSL-1DR-BLK-2026", revenue: 245000, units: 35, roas: 14.0 },
-      { name: "Kenzo Tiger Sweater", sku: "KNZ-TIGER-SW-2026", revenue: 112000, units: 20, roas: 6.8 },
-      { name: "Ami Paris Heart Logo Tee", sku: "AMI-HEART-WHT-2026", revenue: 96000, units: 32, roas: 11.4 },
-      { name: "Hugo Boss Slim Fit Suit", sku: "HB-SUIT-NVY-2026", revenue: 340000, units: 17, roas: 8.6 },
-    ],
-  };
-
-  return NextResponse.json(performanceData);
+    funnel: data.funnel,
+    topCampaigns: data.topCampaigns,
+    source: fromCache ? "cache" : "live_meta_api",
+    fetchedAt,
+  });
 }

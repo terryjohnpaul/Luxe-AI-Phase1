@@ -37,6 +37,26 @@ const AUSPICIOUS_WEDDING_DATES_2026 = [
   { date: "2026-11-15", name: "Tulsi Vivah", note: "Traditional wedding season officially begins" },
 ];
 
+
+// === ENHANCEMENT: Wedding function-level demand + regional styles (from Rs 144 Cr analysis) ===
+const WEDDING_FUNCTIONS: Record<string, { leadTime: string; categories: string[] }> = {
+  engagement: { leadTime: "6-12 months", categories: ["cocktail_wear", "ring_ceremony"] },
+  mehendi: { leadTime: "3-5 days", categories: ["green_yellow", "indo_western"] },
+  sangeet: { leadTime: "2-4 days", categories: ["party_wear", "dance"] },
+  wedding_day: { leadTime: "day_of", categories: ["lehengas", "sherwanis", "sarees"] },
+  reception: { leadTime: "1-2 days after", categories: ["cocktail_gowns", "tuxedos"] },
+  honeymoon: { leadTime: "1-3 weeks after", categories: ["resort_wear", "swimwear"] },
+  guest_outfits: { leadTime: "2-4 weeks before", categories: ["sarees", "suits", "indo_western"] },
+};
+
+const REGIONAL_STYLES: Record<string, { peakMonths: number[]; style: string }> = {
+  north: { peakMonths: [10,11,0,1,3,4], style: "grand_opulent" },
+  south: { peakMonths: [0,1,4,5,10,11], style: "silk_traditional" },
+  bengali: { peakMonths: [0,1,10,11], style: "red_white_banarasi" },
+  gujarati: { peakMonths: [10,11,0,1], style: "bandhani_patola" },
+  punjabi: { peakMonths: [10,11,0,1,3,4], style: "heavy_embroidery" },
+};
+
 export function getWeddingIntensitySignals(): Signal[] {
   const today = new Date();
   const signals: Signal[] = [];

@@ -1,245 +1,163 @@
 import { NextResponse } from "next/server";
 
-const mockCampaigns = [
-  {
-    id: "camp_01",
-    externalId: "120211548976420",
-    platform: "META",
-    name: "Ajio Luxe - Hugo Boss - Urban Achievers ASC",
-    status: "ACTIVE",
-    campaignType: "ASC",
-    dailyBudget: 25000,
-    objective: "OUTCOME_SALES",
-    targetRoas: 5.0,
-    archetype: "URBAN_ACHIEVER",
-    brandFocus: "Hugo Boss",
-    funnelStage: "CONVERSION",
-    isAutomated: true,
-    adAccountId: "act_01",
-    organizationId: "org_01",
-    metrics: {
-      spend: 18420,
-      conversions: 34,
-      conversionValue: 142800,
-      roas: 7.75,
-      impressions: 86200,
-      clicks: 2540,
-      ctr: 2.95,
-      cpc: 7.25,
-    },
-    createdAt: "2026-03-01T00:00:00.000Z",
-    updatedAt: "2026-03-27T06:00:00.000Z",
-  },
-  {
-    id: "camp_02",
-    externalId: "120211548976421",
-    platform: "META",
-    name: "Ajio Luxe - Diesel - Fashion Loyalists Retarget",
-    status: "ACTIVE",
-    campaignType: "RETARGET",
-    dailyBudget: 15000,
-    objective: "OUTCOME_SALES",
-    targetRoas: 8.0,
-    archetype: "FASHION_LOYALIST",
-    brandFocus: "Diesel",
-    funnelStage: "CONVERSION",
-    isAutomated: true,
-    adAccountId: "act_01",
-    organizationId: "org_01",
-    metrics: {
-      spend: 12350,
-      conversions: 28,
-      conversionValue: 168000,
-      roas: 13.6,
-      impressions: 42300,
-      clicks: 1980,
-      ctr: 4.68,
-      cpc: 6.24,
-    },
-    createdAt: "2026-02-15T00:00:00.000Z",
-    updatedAt: "2026-03-27T06:00:00.000Z",
-  },
-  {
-    id: "camp_03",
-    externalId: "customers/1234567890/campaigns/987654321",
-    platform: "GOOGLE",
-    name: "Ajio Luxe - Kenzo PMAX - Tier 1 Cities",
-    status: "ACTIVE",
-    campaignType: "PMAX",
-    dailyBudget: 20000,
-    objective: "PERFORMANCE_MAX",
-    targetRoas: 4.5,
-    archetype: "ASPIRANT",
-    brandFocus: "Kenzo",
-    funnelStage: "CONVERSION",
-    isAutomated: true,
-    adAccountId: "act_02",
-    organizationId: "org_01",
-    metrics: {
-      spend: 16800,
-      conversions: 22,
-      conversionValue: 88000,
-      roas: 5.24,
-      impressions: 124500,
-      clicks: 3100,
-      ctr: 2.49,
-      cpc: 5.42,
-    },
-    createdAt: "2026-03-05T00:00:00.000Z",
-    updatedAt: "2026-03-27T06:00:00.000Z",
-  },
-  {
-    id: "camp_04",
-    externalId: "customers/1234567890/campaigns/987654322",
-    platform: "GOOGLE",
-    name: "Ajio Luxe - Ami Paris - Brand Search",
-    status: "ACTIVE",
-    campaignType: "BRAND_SEARCH",
-    dailyBudget: 8000,
-    objective: "SEARCH",
-    targetRoas: 10.0,
-    archetype: "FASHION_LOYALIST",
-    brandFocus: "Ami Paris",
-    funnelStage: "CONVERSION",
-    isAutomated: false,
-    adAccountId: "act_02",
-    organizationId: "org_01",
-    metrics: {
-      spend: 6200,
-      conversions: 18,
-      conversionValue: 86400,
-      roas: 13.94,
-      impressions: 18700,
-      clicks: 1640,
-      ctr: 8.77,
-      cpc: 3.78,
-    },
-    createdAt: "2026-02-20T00:00:00.000Z",
-    updatedAt: "2026-03-27T06:00:00.000Z",
-  },
-  {
-    id: "camp_05",
-    externalId: "120211548976425",
-    platform: "META",
-    name: "Ajio Luxe - Hugo Boss - Occasional Splurgers Awareness",
-    status: "ACTIVE",
-    campaignType: "AWARENESS",
-    dailyBudget: 12000,
-    objective: "OUTCOME_AWARENESS",
-    targetRoas: 2.5,
-    archetype: "OCCASIONAL_SPLURGER",
-    brandFocus: "Hugo Boss",
-    funnelStage: "AWARENESS",
-    isAutomated: true,
-    adAccountId: "act_01",
-    organizationId: "org_01",
-    metrics: {
-      spend: 10800,
-      conversions: 8,
-      conversionValue: 32000,
-      roas: 2.96,
-      impressions: 210000,
-      clicks: 4200,
-      ctr: 2.0,
-      cpc: 2.57,
-    },
-    createdAt: "2026-03-10T00:00:00.000Z",
-    updatedAt: "2026-03-27T06:00:00.000Z",
-  },
-  {
-    id: "camp_06",
-    externalId: "customers/1234567890/campaigns/987654326",
-    platform: "GOOGLE",
-    name: "Ajio Luxe - Diesel - Demand Gen - Video",
-    status: "PAUSED",
-    campaignType: "DEMAND_GEN",
-    dailyBudget: 10000,
-    objective: "DEMAND_GEN",
-    targetRoas: 3.0,
-    archetype: "URBAN_ACHIEVER",
-    brandFocus: "Diesel",
-    funnelStage: "CONSIDERATION",
-    isAutomated: false,
-    adAccountId: "act_02",
-    organizationId: "org_01",
-    metrics: {
-      spend: 8400,
-      conversions: 6,
-      conversionValue: 25200,
-      roas: 3.0,
-      impressions: 95000,
-      clicks: 2850,
-      ctr: 3.0,
-      cpc: 2.95,
-    },
-    createdAt: "2026-03-08T00:00:00.000Z",
-    updatedAt: "2026-03-25T06:00:00.000Z",
-  },
-];
-
+/**
+ * GET /api/campaigns
+ * Fetches real campaigns from Meta Ads (and Google Ads when available).
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const platform = searchParams.get("platform");
-  const status = searchParams.get("status");
-  const archetype = searchParams.get("archetype");
-  const brand = searchParams.get("brand");
+  const statusFilter = searchParams.get("status");
+  const platformFilter = searchParams.get("platform");
 
-  let filtered = [...mockCampaigns];
+  const campaigns: any[] = [];
 
-  if (platform) {
-    filtered = filtered.filter((c) => c.platform === platform.toUpperCase());
-  }
-  if (status) {
-    filtered = filtered.filter((c) => c.status === status.toUpperCase());
-  }
-  if (archetype) {
-    filtered = filtered.filter((c) => c.archetype === archetype);
-  }
-  if (brand) {
-    filtered = filtered.filter((c) =>
-      c.brandFocus?.toLowerCase().includes(brand.toLowerCase())
-    );
+  // ========== META ADS ==========
+  const metaToken = process.env.META_ADS_ACCESS_TOKEN;
+  const metaAccountId = process.env.META_ADS_ACCOUNT_ID;
+
+  if (metaToken && metaAccountId) {
+    try {
+      const fields = [
+        "id",
+        "name",
+        "status",
+        "objective",
+        "created_time",
+        "updated_time",
+        "daily_budget",
+        "lifetime_budget",
+        "start_time",
+        "stop_time",
+        "bid_strategy",
+      ].join(",");
+
+      const campaignRes = await fetch(
+        `https://graph.facebook.com/v25.0/act_${metaAccountId}/campaigns?fields=${fields}&limit=100&access_token=${metaToken}`
+      );
+      const campaignData = await campaignRes.json();
+
+      if (campaignData.data) {
+        // Fetch insights for all campaigns
+        const campaignIds = campaignData.data.map((c: any) => c.id);
+        const insightsMap: Record<string, any> = {};
+
+        // Fetch insights in parallel (batch of up to 50)
+        await Promise.all(
+          campaignData.data.map(async (campaign: any) => {
+            try {
+              const insightRes = await fetch(
+                `https://graph.facebook.com/v25.0/${campaign.id}/insights?fields=spend,impressions,clicks,ctr,cpc,actions,action_values,conversions&date_preset=maximum&access_token=${metaToken}`
+              );
+              const insightData = await insightRes.json();
+              if (insightData.data?.[0]) {
+                insightsMap[campaign.id] = insightData.data[0];
+              }
+            } catch {}
+          })
+        );
+
+        // Fetch ad sets for each campaign
+        const adSetsMap: Record<string, any[]> = {};
+        await Promise.all(
+          campaignData.data.map(async (campaign: any) => {
+            try {
+              const adSetRes = await fetch(
+                `https://graph.facebook.com/v25.0/${campaign.id}/adsets?fields=id,name,status,daily_budget,targeting,optimization_goal,billing_event,start_time&access_token=${metaToken}`
+              );
+              const adSetData = await adSetRes.json();
+              if (adSetData.data) {
+                adSetsMap[campaign.id] = adSetData.data;
+              }
+            } catch {}
+          })
+        );
+
+        for (const c of campaignData.data) {
+          const insights = insightsMap[c.id];
+          const adSets = adSetsMap[c.id] || [];
+          const adSet = adSets[0]; // Primary ad set
+
+          // Extract targeting info
+          let targetingInfo = "Not set";
+          if (adSet?.targeting) {
+            const t = adSet.targeting;
+            const parts: string[] = [];
+            if (t.geo_locations?.countries) parts.push("Countries: " + t.geo_locations.countries.join(", "));
+            if (t.geo_locations?.cities) parts.push("Cities: " + t.geo_locations.cities.map((c: any) => c.name).join(", "));
+            if (t.age_min || t.age_max) parts.push(`Age: ${t.age_min || 18}-${t.age_max || 65}`);
+            if (t.flexible_spec?.[0]?.interests) {
+              parts.push("Interests: " + t.flexible_spec[0].interests.map((i: any) => i.name).join(", "));
+            }
+            if (parts.length > 0) targetingInfo = parts.join(" | ");
+          }
+
+          // Extract conversions from actions
+          let conversions = 0;
+          let conversionValue = 0;
+          if (insights?.actions) {
+            const purchase = insights.actions.find((a: any) =>
+              a.action_type === "purchase" || a.action_type === "offsite_conversion.fb_pixel_purchase"
+            );
+            if (purchase) conversions = parseInt(purchase.value);
+          }
+          if (insights?.action_values) {
+            const purchaseValue = insights.action_values.find((a: any) =>
+              a.action_type === "purchase" || a.action_type === "offsite_conversion.fb_pixel_purchase"
+            );
+            if (purchaseValue) conversionValue = parseFloat(purchaseValue.value);
+          }
+
+          const spend = parseFloat(insights?.spend || "0");
+
+          campaigns.push({
+            id: c.id,
+            platform: "META",
+            name: c.name,
+            status: c.status,
+            objective: c.objective,
+            dailyBudget: c.daily_budget ? parseInt(c.daily_budget) / 100 : (adSet?.daily_budget ? parseInt(adSet.daily_budget) / 100 : 0),
+            bidStrategy: c.bid_strategy || "LOWEST_COST",
+            targeting: targetingInfo,
+            adSets: adSets.length,
+            createdAt: c.created_time,
+            updatedAt: c.updated_time,
+            startTime: c.start_time || adSet?.start_time,
+            metrics: {
+              spend,
+              impressions: parseInt(insights?.impressions || "0"),
+              clicks: parseInt(insights?.clicks || "0"),
+              ctr: parseFloat(insights?.ctr || "0"),
+              cpc: parseFloat(insights?.cpc || "0"),
+              conversions,
+              conversionValue,
+              roas: spend > 0 ? conversionValue / spend : 0,
+            },
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error("[campaigns] Meta Ads error:", err.message);
+    }
   }
 
-  return NextResponse.json({
-    campaigns: filtered,
+  // Apply filters
+  let filtered = campaigns;
+  if (statusFilter) {
+    filtered = filtered.filter(c => c.status === statusFilter.toUpperCase());
+  }
+  if (platformFilter) {
+    filtered = filtered.filter(c => c.platform === platformFilter.toUpperCase());
+  }
+
+  // Sort by created date (newest first)
+  filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const stats = {
     total: filtered.length,
-    platforms: { META: 3, GOOGLE: 3 },
-  });
-}
+    active: filtered.filter(c => c.status === "ACTIVE").length,
+    paused: filtered.filter(c => c.status === "PAUSED").length,
+    totalSpend: filtered.reduce((sum, c) => sum + (c.metrics?.spend || 0), 0),
+  };
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-
-    const newCampaign = {
-      id: `camp_${Date.now()}`,
-      externalId: `pending_${Date.now()}`,
-      platform: body.platform || "META",
-      name: body.name || "New Campaign",
-      status: "PAUSED" as const,
-      campaignType: body.campaignType || "ASC",
-      dailyBudget: body.dailyBudget || 10000,
-      objective: body.objective || "OUTCOME_SALES",
-      targetRoas: body.targetRoas || 5.0,
-      archetype: body.archetype || "UNCLASSIFIED",
-      brandFocus: body.brandFocus || null,
-      funnelStage: body.funnelStage || "CONVERSION",
-      isAutomated: body.isAutomated ?? false,
-      adAccountId: body.adAccountId || "act_01",
-      organizationId: "org_01",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    return NextResponse.json(
-      { campaign: newCampaign, message: "Campaign created (mock)" },
-      { status: 201 }
-    );
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid request body" },
-      { status: 400 }
-    );
-  }
+  return NextResponse.json({ campaigns: filtered, stats });
 }

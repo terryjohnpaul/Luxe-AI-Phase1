@@ -35,6 +35,33 @@ import { getRunwayPipelineSignals } from "./runway-pipeline";
 import { getLuxuryLaunchSignals } from "./luxury-launches";
 import { getEconomicSentimentSignals } from "./economic-sentiment";
 
+// NEW: Signals extracted from Rs 144 Cr ad spend analysis (Apr 2026)
+import { getLuxuryDaypartRhythmSignals } from "./luxury-daypart-rhythm";
+import { getLuxuryConsumerCalendarSignals } from "./luxury-consumer-calendar";
+import { getSaleEventDynamicsSignals } from "./sale-event-dynamics";
+import { getLuxuryDemographicIndexSignals } from "./luxury-demographic-index";
+import { getLuxuryGeoIndexSignals } from "./luxury-geo-index";
+import { getBrandDemandIntelligenceSignals } from "./brand-demand-intelligence";
+import { getContentPerformanceTruthsSignals } from "./content-performance-truths";
+import { getCompetitiveLandscapeSignals } from "./competitive-landscape";
+import { getPlatformPlacementRulesSignals } from "./platform-placement-rules";
+import { getFunnelBenchmarkSignals } from "./funnel-benchmarks";
+import { getCulturalFestivalFashionSignals } from "./cultural-festival-fashion";
+import { getCompoundIntersectionSignals } from "./compound-intersections";
+
+// NEW: Live ad platform signals (require Meta/Google API access)
+import { getMetaPerformanceSignals } from "./meta-performance-signals";
+import { getPlacementEfficiencySignals } from "./placement-efficiency";
+import { getDaypartOptimizerSignals } from "./daypart-optimizer";
+import { getdemographicshiftsSignals } from "./demographic-shifts";
+import { getfrequencymonitorSignals } from "./frequency-monitor";
+import { getfunnelhealthSignals } from "./funnel-health";
+import { getcreativeperformanceSignals } from "./creative-performance";
+import { getgeoperformanceSignals } from "./geo-performance";
+import { getcrossplatformorchestratorSignals } from "./cross-platform-orchestrator";
+
+
+
 // Severity ranking for sorting
 const SEVERITY_RANK: Record<string, number> = {
   critical: 0,
@@ -81,6 +108,31 @@ export async function getAllSignals(): Promise<Signal[]> {
     Promise.resolve(getRunwayPipelineSignals()),
     Promise.resolve(getLuxuryLaunchSignals()),
     Promise.resolve(getEconomicSentimentSignals()),
+
+    // NEW: Encoded intelligence from Rs 144 Cr ad spend analysis
+    Promise.resolve(getLuxuryDaypartRhythmSignals()),
+    Promise.resolve(getLuxuryConsumerCalendarSignals()),
+    Promise.resolve(getSaleEventDynamicsSignals()),
+    Promise.resolve(getLuxuryDemographicIndexSignals()),
+    Promise.resolve(getLuxuryGeoIndexSignals()),
+    Promise.resolve(getBrandDemandIntelligenceSignals()),
+    Promise.resolve(getContentPerformanceTruthsSignals()),
+    Promise.resolve(getCompetitiveLandscapeSignals()),
+    Promise.resolve(getPlatformPlacementRulesSignals()),
+    Promise.resolve(getFunnelBenchmarkSignals()),
+    Promise.resolve(getCulturalFestivalFashionSignals()),
+    Promise.resolve(getCompoundIntersectionSignals()),
+
+    // Live ad platform signals (require API tokens)
+    getMetaPerformanceSignals(),
+    getPlacementEfficiencySignals(),
+    getDaypartOptimizerSignals(),
+    getdemographicshiftsSignals(),
+    getfrequencymonitorSignals(),
+    getfunnelhealthSignals(),
+    getcreativeperformanceSignals(),
+    getgeoperformanceSignals(),
+    getcrossplatformorchestratorSignals(),
   ]);
 
   const allSignals: Signal[] = [];
@@ -92,6 +144,9 @@ export async function getAllSignals(): Promise<Signal[]> {
     "pinterest-trends", "lyst-trending", "competitor-pricing", "instagram-hashtags", "occasion-dressing",
     "smart-recommendations",
     "fashion-events", "wedding-intensity", "category-demand", "aesthetic-trends", "runway-pipeline", "luxury-launches", "economic-sentiment",
+    "daypart-rhythm", "consumer-calendar", "sale-dynamics", "demographic-index", "geo-index", "brand-demand",
+    "content-truths", "competitive-landscape", "placement-rules", "funnel-benchmarks", "festival-fashion", "compound-intersections",
+    "meta-performance", "placement-efficiency", "daypart-live", "demographic-shifts", "frequency-monitor", "funnel-health", "creative-perf", "geo-perf", "cross-platform",
   ];
 
   results.forEach((result, index) => {

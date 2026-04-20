@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   TrendingUp, DollarSign, ShoppingBag,
   CloudRain, Sun, Flame, AlertTriangle, Package, Sparkles,
@@ -80,6 +80,10 @@ interface AdRecommendation {
     meta: string;
     google: string;
   };
+  indiaRelevance?: {
+    score: "high" | "medium" | "low";
+    note: string;
+  };
 }
 
 interface ApiResponse {
@@ -89,6 +93,22 @@ interface ApiResponse {
   recommendationCount: number;
   fetchedAt: string;
   sources: Record<string, { enabled: boolean; needsKey: boolean; keyName: string }>;
+}
+
+interface MatchedProductData {
+  id: string;
+  brand: string;
+  name: string;
+  category: string;
+  price: number;
+  originalPrice: number;
+  discount: number;
+  tier: string;
+  inStock: boolean;
+  stockQty: number;
+  tags: string[];
+  matchScore: number;
+  matchReasons: string[];
 }
 
 // ============================================================
@@ -151,6 +171,135 @@ function getPriorityColor(priority: string) {
   }
 }
 
+function formatPrice(price: number): string {
+  if (price >= 100000) {
+    return "\u20B9" + (price / 100000).toFixed(price % 100000 === 0 ? 0 : 1) + "L";
+  }
+  return "\u20B9" + price.toLocaleString("en-IN");
+}
+
+function getScoreColor(score: number): string {
+  const pct = score * 100;
+  if (pct >= 80) return "text-emerald-600";
+  if (pct >= 60) return "text-blue-600";
+  if (pct >= 40) return "text-amber-600";
+  return "text-orange-500";
+}
+
+function getScoreBg(score: number): string {
+  const pct = score * 100;
+  if (pct >= 80) return "bg-emerald-50 border-emerald-200";
+  if (pct >= 60) return "bg-blue-50 border-blue-200";
+  if (pct >= 40) return "bg-amber-50 border-amber-200";
+  return "bg-orange-50 border-orange-200";
+}
+
+// ============================================================
+// SUGGESTED PRODUCTS COMPONENT (inline within each rec card)
+// ============================================================
+
+function SuggestedProducts({ recIndex }: { recIndex: number }) {
+  const [products, setProducts] = useState<MatchedProductData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const fetched = useRef(false);
+
+  useEffect(() => {
+    if (fetched.current) return;
+    fetched.current = true;
+
+    fetch(`/api/catalog/match?recId=${recIndex}`)
+      .then(r => {
+        if (!r.ok) throw new Error("Failed");
+        return r.json();
+      })
+      .then(data => {
+        setProducts(data.products || []);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+      });
+  }, [recIndex]);
+
+  if (loading) {
+    return (
+      <div className="mt-3 py-2.5 px-3 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 rounded-lg border border-indigo-100">
+        <div className="flex items-center gap-2">
+          <Package size={13} className="text-indigo-500" />
+          <span className="text-[11px] font-semibold text-indigo-700">Suggested Products</span>
+          <Loader2 size={12} className="animate-spin text-indigo-400 ml-1" />
+          <span className="text-[10px] text-indigo-400">Matching catalog...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || products.length === 0) {
+    return null;
+  }
+
+  const displayProducts = showAll ? products : products.slice(0, 8);
+
+  return (
+    <div className="mt-3 py-2.5 px-3 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 rounded-lg border border-indigo-100">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Package size={13} className="text-indigo-500" />
+          <span className="text-[11px] font-semibold text-indigo-700">Suggested Products</span>
+          <span className="text-[10px] bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded-full font-medium">{products.length} matches</span>
+        </div>
+        {products.length > 8 && (
+          <button
+            onClick={() => setShowAll(!showAll)}
+            className="text-[10px] text-indigo-600 hover:text-indigo-800 font-medium hover:underline"
+          >
+            {showAll ? "Show less" : `View all ${products.length} products`}
+          </button>
+        )}
+      </div>
+
+      <div ref={scrollRef} className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        {displayProducts.map((product) => (
+          <div
+            key={product.id}
+            className="flex-shrink-0 w-[130px] bg-white rounded-lg border border-gray-200 p-2.5 hover:border-indigo-300 hover:shadow-sm transition-all group"
+          >
+            {/* Brand */}
+            <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider leading-tight truncate">
+              {product.brand}
+            </p>
+            {/* Name */}
+            <p className="text-[10px] font-medium text-gray-800 leading-tight mt-0.5 line-clamp-2 min-h-[28px]">
+              {product.name}
+            </p>
+            {/* Price */}
+            <div className="flex items-baseline gap-1 mt-1.5">
+              <span className="text-[11px] font-bold text-gray-900">{formatPrice(product.price)}</span>
+              {product.discount > 0 && (
+                <span className="text-[9px] text-red-500 font-medium">-{product.discount}%</span>
+              )}
+            </div>
+            {/* Match Score */}
+            <div className={cn("mt-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-semibold", getScoreBg(product.matchScore))}>
+              <span className={getScoreColor(product.matchScore)}>{Math.round(product.matchScore * 100)}% match</span>
+            </div>
+            {/* Top match reason pill */}
+            {product.matchReasons.length > 0 && (
+              <p className="text-[8px] text-gray-500 mt-1 leading-tight truncate" title={product.matchReasons.join(" | ")}>
+                {product.matchReasons[0].replace(/^(Brand match|Category match|Occasion|Tag|Subcategory match|Brand in direction|Category in direction|Product name match): /, "")}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ============================================================
 // MAIN COMPONENT
 // ============================================================
@@ -192,6 +341,9 @@ export default function CommandCenterPage() {
     bodyTexts: string[];
     cta: string;
   }>>({});
+  const [pushingDraft, setPushingDraft] = useState<string | null>(null);
+  const [pushResult, setPushResult] = useState<Record<string, { success: boolean; message: string; platform?: string } | null>>({});
+  const [adConnection, setAdConnection] = useState<{ google: { connected: boolean }; meta: { connected: boolean } } | null>(null);
 
   const startEditing = (rec: AdRecommendation) => {
     trackEditStart(rec.id);
@@ -225,6 +377,51 @@ export default function CommandCenterPage() {
     setEditingRec(null);
   };
 
+  // Check ad platform connection status
+  useEffect(() => {
+    fetch("/api/ads/push-draft").then(r => r.json()).then(setAdConnection).catch(() => {});
+  }, []);
+
+  const pushToDraft = async (rec: AdRecommendation, platform: "google" | "meta" | "both") => {
+    setPushingDraft(rec.id);
+    setPushResult(prev => ({ ...prev, [rec.id]: null }));
+    try {
+      const edits = editValues[rec.id];
+      const res = await fetch("/api/ads/push-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform,
+          campaignName: rec.title,
+          headlines: edits?.headlines || rec.creative.sampleHeadlines,
+          bodyTexts: edits?.bodyTexts || rec.creative.samplePrimaryTexts,
+          cta: edits?.cta || rec.creative.cta,
+          budget: edits?.budget || rec.budget.suggested,
+          duration: edits?.duration || rec.budget.duration,
+          bidStrategy: edits?.bidStrategy || rec.budget.bidStrategy,
+          location: edits?.location || rec.targeting.location,
+          timing: edits?.timing || rec.targeting.timing,
+          brands: rec.creative.brands,
+          signalTitle: rec.signalTitle,
+        }),
+      });
+      const data = await res.json();
+      setPushResult(prev => ({ ...prev, [rec.id]: { success: data.success, message: data.message, platform } }));
+      if (data.success) {
+        trackApprove(rec.id, !!edits);
+        setApprovedRecs(prev => new Set(prev).add(rec.id));
+        alert("Draft campaign created successfully in " + (platform === "meta" ? "Meta" : "Google") + " Ads!");
+      } else {
+        alert("Failed: " + data.message);
+      }
+    } catch (err: any) {
+      setPushResult(prev => ({ ...prev, [rec.id]: { success: false, message: err.message } }));
+      alert("Error: " + err.message);
+    } finally {
+      setPushingDraft(null);
+    }
+  };
+
   const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
@@ -255,6 +452,14 @@ export default function CommandCenterPage() {
       priorityFilter === "all" || r.priority === priorityFilter
     );
   }, [data, priorityFilter]);
+
+  // Build a map of rec ID to its original index in the full recommendations array
+  const recIndexMap = useMemo(() => {
+    if (!data) return new Map<string, number>();
+    const map = new Map<string, number>();
+    data.recommendations.forEach((r, i) => map.set(r.id, i));
+    return map;
+  }, [data]);
 
   const signalTypes = useMemo(() => {
     if (!data) return ["all"];
@@ -423,6 +628,7 @@ export default function CommandCenterPage() {
               const isGuideOpen = expandedGuide === rec.id;
               const isApproved = approvedRecs.has(rec.id);
               const isSkipped = skippedRecs.has(rec.id);
+              const recIdx = recIndexMap.get(rec.id) ?? 0;
 
               return (
                 <div key={rec.id} className={cn(
@@ -439,9 +645,22 @@ export default function CommandCenterPage() {
                             {rec.priority.toUpperCase()}
                           </span>
                           <span className="text-[10px] bg-surface px-2 py-0.5 rounded">{getSignalTypeLabel(rec.signalType)}</span>
+                          {rec.indiaRelevance && (
+                            <span className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-full font-medium",
+                              rec.indiaRelevance.score === "high" && "bg-emerald-500/20 text-emerald-400",
+                              rec.indiaRelevance.score === "medium" && "bg-amber-500/20 text-amber-400",
+                              rec.indiaRelevance.score === "low" && "bg-red-500/20 text-red-400",
+                            )}>
+                              {rec.indiaRelevance.score === "high" ? "▲ Strong Signal" : rec.indiaRelevance.score === "low" ? "▼ Weak Signal" : "● Moderate"}
+                            </span>
+                          )}
                           <span className="text-[10px] text-muted">Signal: {rec.signalTitle}</span>
                         </div>
                         <h3 className="font-semibold text-sm">{rec.title}</h3>
+                        {rec.indiaRelevance?.note && (
+                          <p className="text-xs text-gray-500 mt-1 italic">{rec.indiaRelevance.note}</p>
+                        )}
                         <p className="text-xs text-muted mt-1">{rec.description.slice(0, 150)}</p>
 
                         <div className="flex items-center gap-4 mt-3 flex-wrap">
@@ -475,12 +694,15 @@ export default function CommandCenterPage() {
                               <Info size={11} className="text-blue-400 mt-0.5 shrink-0" />
                               <div>
                                 <span className="text-[10px] font-medium text-blue-500">Why this prediction: </span>
-                                <span className="text-[10px] text-muted">{rec.prediction.factors.join(" · ")}</span>
+                                <span className="text-[10px] text-muted">{rec.prediction.factors.join(" \u00B7 ")}</span>
                               </div>
                             </div>
                             <p className="text-[9px] text-muted/60 mt-1 ml-4">{rec.prediction.methodology}</p>
                           </div>
                         </div>
+
+                        {/* Suggested Products Strip */}
+                        <SuggestedProducts recIndex={recIdx} />
                       </div>
 
                       <div className="flex items-center gap-3 shrink-0">
@@ -509,20 +731,41 @@ export default function CommandCenterPage() {
                           <span className="text-[9px] text-muted font-medium">Success</span>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           {!isApproved && !isSkipped && (
                             <>
-                              <button onClick={() => startEditing(rec)} className="btn-secondary text-xs flex items-center gap-1">
-                                <Pencil size={12} /> Edit Campaign
+                              <button onClick={() => startEditing(rec)} className="text-xs text-muted hover:text-text-primary flex items-center gap-1 px-2 py-1 rounded hover:bg-surface transition-colors">
+                                <Pencil size={11} /> Edit
                               </button>
-                              <button onClick={() => { trackApprove(rec.id, !!editValues[rec.id]); setApprovedRecs(prev => new Set(prev).add(rec.id)); }} className="btn-approve flex items-center gap-1">
-                                <Check size={14} /> Run This
+                              {pushingDraft === rec.id ? (
+                                <span className="text-xs text-brand-blue flex items-center gap-1.5 px-3 py-1.5"><Loader2 size={13} className="animate-spin" /> Creating draft...</span>
+                              ) : (
+                                <div className="flex items-center border border-card-border rounded-lg overflow-hidden">
+                                  <button onClick={() => pushToDraft(rec, "meta")}
+                                    className="text-xs flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                                    title="Create campaign + ad set in Meta Ads">
+                                    Meta
+                                  </button>
+                                  <button onClick={() => pushToDraft(rec, "google")}
+                                    className="text-xs flex items-center gap-1.5 px-3 py-1.5 bg-surface text-muted hover:bg-card-border hover:text-text-primary transition-colors border-l border-card-border"
+                                    title="Create campaign in Google Ads">
+                                    Google
+                                  </button>
+                                </div>
+                              )}
+                              <button onClick={() => { trackSkip(rec.id); setSkippedRecs(prev => new Set(prev).add(rec.id)); }}
+                                className="text-xs text-muted hover:text-text-primary px-2 py-1 rounded hover:bg-surface transition-colors">
+                                Skip
                               </button>
-                              <button onClick={() => { trackSkip(rec.id); setSkippedRecs(prev => new Set(prev).add(rec.id)); }} className="btn-secondary text-xs">Skip</button>
                             </>
                           )}
-                          {isApproved && <span className="text-xs text-brand-green font-semibold flex items-center gap-1"><Check size={14} /> Approved</span>}
-                          {isSkipped && <span className="text-xs text-muted flex items-center gap-1"><X size={14} /> Skipped</span>}
+                          {isApproved && pushResult[rec.id] && (
+                            <span className={"text-xs font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-lg " + (pushResult[rec.id]?.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600")}>
+                              {pushResult[rec.id]?.success ? <><Check size={13} /> Drafted to {pushResult[rec.id]?.platform === "meta" ? "Meta" : "Google"}</> : <><AlertTriangle size={13} /> Failed</>}
+                            </span>
+                          )}
+                          {isApproved && !pushResult[rec.id] && <span className="text-xs font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Check size={13} /> Approved</span>}
+                          {isSkipped && <span className="text-xs text-muted bg-surface px-3 py-1.5 rounded-lg flex items-center gap-1.5"><X size={13} /> Skipped</span>}
                         </div>
                       </div>
                     </div>

@@ -1,113 +1,97 @@
 import { NextResponse } from "next/server";
+import { cachedFetch } from "@/lib/api-cache";
 
-function generateDailyMetrics(startDate: string, endDate: string) {
-  const days: Array<{
-    date: string;
-    spend: number;
-    revenue: number;
-    conversions: number;
-    impressions: number;
-    clicks: number;
-    roas: number;
-    cpa: number;
-  }> = [];
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+const META_BASE = "https://graph.facebook.com/v25.0";
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const dayOfWeek = d.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+interface DailyMetric {
+  date: string;
+  spend: number;
+  revenue: number;
+  conversions: number;
+  impressions: number;
+  clicks: number;
+  roas: number;
+  cpa: number;
+}
 
-    // Luxury fashion gets more weekend traffic
-    const baseSpend = isWeekend ? 85000 : 72000;
-    const variance = 0.85 + Math.random() * 0.3;
-    const spend = Math.round(baseSpend * variance);
+function extractPurchases(actions: any[]): number {
+  if (!actions) return 0;
+  const purchase = actions.find((a: any) => a.action_type === "purchase" || a.action_type === "omni_purchase");
+  return purchase ? parseInt(purchase.value) : 0;
+}
 
-    const conversionRate = isWeekend ? 0.032 : 0.028;
-    const avgClicks = Math.round(spend / (5.5 + Math.random() * 2));
-    const conversions = Math.round(avgClicks * conversionRate);
-    const avgOrderValue = 4200 + Math.random() * 1800;
-    const revenue = Math.round(conversions * avgOrderValue);
+function extractRevenue(actionValues: any[]): number {
+  if (!actionValues) return 0;
+  const purchase = actionValues.find((a: any) => a.action_type === "omni_purchase" || a.action_type === "purchase");
+  return purchase ? parseFloat(purchase.value) : 0;
+}
 
-    days.push({
-      date: d.toISOString().split("T")[0],
-      spend,
-      revenue,
-      conversions,
-      impressions: Math.round(avgClicks * (28 + Math.random() * 12)),
-      clicks: avgClicks,
-      roas: parseFloat((revenue / spend).toFixed(2)),
-      cpa: parseFloat((spend / Math.max(conversions, 1)).toFixed(0)),
+async function fetchMetaDailyTrend(): Promise<DailyMetric[]> {
+  const token = process.env.AJIO_LUXE_META_ACCESS_TOKEN;
+  const accountId = process.env.AJIO_LUXE_META_ACCOUNT_ID;
+  if (!token || !accountId) return [];
+
+  try {
+    const url = `${META_BASE}/act_${accountId}/insights?fields=spend,impressions,clicks,actions,action_values,purchase_roas&time_increment=1&date_preset=last_30d&access_token=${token}`;
+    const resp = await fetch(url);
+    const json = await resp.json();
+    if (!json.data) return [];
+
+    return json.data.map((day: any) => {
+      const spend = parseFloat(day.spend || "0");
+      const conversions = extractPurchases(day.actions);
+      const revenue = extractRevenue(day.action_values);
+      return {
+        date: day.date_start,
+        spend: Math.round(spend),
+        revenue: Math.round(revenue),
+        conversions,
+        impressions: parseInt(day.impressions || "0"),
+        clicks: parseInt(day.clicks || "0"),
+        roas: spend > 0 ? parseFloat((revenue / spend).toFixed(2)) : 0,
+        cpa: conversions > 0 ? parseFloat((spend / conversions).toFixed(0)) : 0,
+      };
     });
+  } catch (e) {
+    console.error("[metrics] Meta API error:", e);
+    return [];
   }
-
-  return days;
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const startDate = searchParams.get("startDate") || "2026-03-01";
-  const endDate = searchParams.get("endDate") || "2026-03-27";
-  const platform = searchParams.get("platform"); // META, GOOGLE, or null for all
+  const refresh = searchParams.get("refresh") === "true";
 
-  const dailyMetrics = generateDailyMetrics(startDate, endDate);
-
-  const totals = dailyMetrics.reduce(
-    (acc, day) => ({
-      spend: acc.spend + day.spend,
-      revenue: acc.revenue + day.revenue,
-      conversions: acc.conversions + day.conversions,
-      impressions: acc.impressions + day.impressions,
-      clicks: acc.clicks + day.clicks,
-    }),
-    { spend: 0, revenue: 0, conversions: 0, impressions: 0, clicks: 0 }
+  const { data: dailyMetrics, fetchedAt, fromCache } = await cachedFetch<DailyMetric[]>(
+    "meta-daily-metrics",
+    fetchMetaDailyTrend,
+    refresh
   );
 
-  const roas = parseFloat((totals.revenue / totals.spend).toFixed(2));
-  const cpa = Math.round(totals.spend / Math.max(totals.conversions, 1));
-  const netRoas = parseFloat((roas * 0.82).toFixed(2)); // ~18% return rate for luxury
-  const ctr = parseFloat(
-    ((totals.clicks / totals.impressions) * 100).toFixed(2)
-  );
+  if (!dailyMetrics || dailyMetrics.length === 0) {
+    return NextResponse.json({
+      dailyMetrics: [],
+      summary: { totalSpend: 0, totalRevenue: 0, totalConversions: 0, avgRoas: 0, avgCpa: 0 },
+      source: "no_data",
+      fetchedAt,
+    });
+  }
+
+  const totalSpend = dailyMetrics.reduce((s, d) => s + d.spend, 0);
+  const totalRevenue = dailyMetrics.reduce((s, d) => s + d.revenue, 0);
+  const totalConversions = dailyMetrics.reduce((s, d) => s + d.conversions, 0);
 
   return NextResponse.json({
-    period: { startDate, endDate },
-    platform: platform || "ALL",
-    totals: {
-      spend: totals.spend,
-      revenue: totals.revenue,
-      conversions: totals.conversions,
-      impressions: totals.impressions,
-      clicks: totals.clicks,
-      roas,
-      netRoas,
-      cpa,
-      ctr,
-      returnRate: 18.2,
-      avgOrderValue: Math.round(totals.revenue / Math.max(totals.conversions, 1)),
+    dailyMetrics,
+    summary: {
+      totalSpend,
+      totalRevenue,
+      totalConversions,
+      avgRoas: totalSpend > 0 ? parseFloat((totalRevenue / totalSpend).toFixed(2)) : 0,
+      avgCpa: totalConversions > 0 ? parseFloat((totalSpend / totalConversions).toFixed(0)) : 0,
+      days: dailyMetrics.length,
     },
-    byPlatform: {
-      META: {
-        spend: Math.round(totals.spend * 0.55),
-        revenue: Math.round(totals.revenue * 0.58),
-        conversions: Math.round(totals.conversions * 0.56),
-        roas: parseFloat(((totals.revenue * 0.58) / (totals.spend * 0.55)).toFixed(2)),
-      },
-      GOOGLE: {
-        spend: Math.round(totals.spend * 0.45),
-        revenue: Math.round(totals.revenue * 0.42),
-        conversions: Math.round(totals.conversions * 0.44),
-        roas: parseFloat(((totals.revenue * 0.42) / (totals.spend * 0.45)).toFixed(2)),
-      },
-    },
-    byBrand: [
-      { brand: "Hugo Boss", spend: Math.round(totals.spend * 0.35), revenue: Math.round(totals.revenue * 0.38), roas: 7.2 },
-      { brand: "Diesel", spend: Math.round(totals.spend * 0.25), revenue: Math.round(totals.revenue * 0.28), roas: 8.4 },
-      { brand: "Kenzo", spend: Math.round(totals.spend * 0.2), revenue: Math.round(totals.revenue * 0.18), roas: 5.8 },
-      { brand: "Ami Paris", spend: Math.round(totals.spend * 0.12), revenue: Math.round(totals.revenue * 0.11), roas: 6.1 },
-      { brand: "Armani Exchange", spend: Math.round(totals.spend * 0.08), revenue: Math.round(totals.revenue * 0.05), roas: 3.9 },
-    ],
-    daily: dailyMetrics,
-    currency: "INR",
+    source: fromCache ? "cache" : "live_meta_api",
+    fetchedAt,
   });
 }

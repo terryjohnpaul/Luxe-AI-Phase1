@@ -264,6 +264,86 @@ async function generateAdCopy(orgId: string, payload: any) {
 // LEARNING / FLYWHEEL PROCESSOR
 // ============================================================
 
+
+
+// === linkOutcomesToRecommendations: Closes the learning flywheel loop ===
+async function linkOutcomesToRecommendations(orgId: string, platform: string) {
+  try {
+    const { db } = await import("@/lib/db");
+    
+    // Find recommendations with linkedCampaignId set but no outcomes yet
+    const linked = await db.flywhRecommendation.findMany({
+      where: {
+        organizationId: orgId,
+        linkedCampaignId: { not: null },
+        campaignOutcomes: { none: {} },
+        status: "approved",
+      },
+      take: 50,
+    });
+
+    if (linked.length === 0) {
+      console.log("[linkOutcomes] No pending recommendations to link");
+      return { linked: 0 };
+    }
+
+    let linkedCount = 0;
+    for (const rec of linked) {
+      try {
+        // Find campaign metrics for the linked campaign
+        const campaign = await db.campaign.findFirst({
+          where: { externalId: rec.linkedCampaignId!, organizationId: orgId }
+        });
+        if (!campaign) continue;
+
+        const metrics = await db.campaignMetric.findMany({
+          where: {
+            campaignId: campaign.id,
+            date: { gte: rec.createdAt }
+          }
+        });
+        if (metrics.length === 0) continue;
+
+        const totals = metrics.reduce((acc: any, m: any) => ({
+          impressions: acc.impressions + (m.impressions || 0),
+          clicks: acc.clicks + (m.clicks || 0),
+          spend: acc.spend + (m.spend || 0),
+          conversions: acc.conversions + (m.conversions || 0),
+          revenue: acc.revenue + (m.conversionValue || 0),
+        }), { impressions: 0, clicks: 0, spend: 0, conversions: 0, revenue: 0 });
+
+        await db.campaignOutcome.create({
+          data: {
+            recommendationId: rec.id,
+            organizationId: orgId,
+            platform,
+            externalCampaignId: rec.linkedCampaignId!,
+            dateStart: rec.createdAt,
+            dateEnd: new Date(),
+            impressions: totals.impressions,
+            clicks: totals.clicks,
+            spend: totals.spend,
+            conversions: totals.conversions,
+            revenue: totals.revenue,
+            ctr: totals.impressions > 0 ? totals.clicks / totals.impressions : null,
+            roas: totals.spend > 0 ? totals.revenue / totals.spend : null,
+            cpa: totals.conversions > 0 ? totals.spend / totals.conversions : null,
+          }
+        });
+        linkedCount++;
+      } catch (e) {
+        console.error("[linkOutcomes] Error linking recommendation", rec.id, e);
+      }
+    }
+
+    console.log(`[linkOutcomes] Linked ${linkedCount} recommendations to outcomes`);
+    return { linked: linkedCount };
+  } catch (e) {
+    console.error("[linkOutcomes] Error:", e);
+    return { linked: 0 };
+  }
+}
+
 export async function processLearning(data: LearningJobData) {
   const { type, organizationId } = data;
 

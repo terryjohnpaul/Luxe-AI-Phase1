@@ -1,172 +1,65 @@
 import { NextResponse } from "next/server";
+import { cachedFetch } from "@/lib/api-cache";
 
-const mockAudiences = [
-  {
-    id: "aud_01",
-    name: "Fashion Loyalists",
-    description: "High-frequency luxury buyers with strong brand affinity. Shop 6+ times/year, low discount dependency, prefer current-season collections.",
-    archetype: "FASHION_LOYALIST",
-    memberCount: 12480,
-    filters: {
-      totalOrders: { min: 6 },
-      avgOrderValue: { min: 5000 },
-      discountUsage: { max: 15 },
-      returnRate: { max: 12 },
-    },
-    metaAudienceId: "23856742901234",
-    googleListId: "customers/1234567890/userLists/111222333",
-    lastSyncedAt: "2026-03-27T04:00:00.000Z",
-    metrics: {
-      avgClv: 78500,
-      avgOrderValue: 6800,
-      avgReturnRate: 8.5,
-      avgDiscountUsage: 9.2,
-      topBrands: ["Hugo Boss", "Diesel", "Ami Paris"],
-      topCities: ["Mumbai", "Delhi", "Bangalore"],
-      conversionRate: 4.8,
-      roas: 11.2,
-    },
-    organizationId: "org_01",
-    createdAt: "2026-01-15T00:00:00.000Z",
-    updatedAt: "2026-03-27T04:00:00.000Z",
-  },
-  {
-    id: "aud_02",
-    name: "Urban Achievers",
-    description: "Young professionals (25-35) in Tier 1 cities. First luxury purchase within 6 months, respond well to aspirational lifestyle content and social proof.",
-    archetype: "URBAN_ACHIEVER",
-    memberCount: 34200,
-    filters: {
-      totalOrders: { min: 2, max: 5 },
-      avgOrderValue: { min: 3500, max: 8000 },
-      tier: ["TIER_1"],
-    },
-    metaAudienceId: "23856742901235",
-    googleListId: "customers/1234567890/userLists/111222334",
-    lastSyncedAt: "2026-03-27T04:00:00.000Z",
-    metrics: {
-      avgClv: 42000,
-      avgOrderValue: 4500,
-      avgReturnRate: 15.2,
-      avgDiscountUsage: 22.5,
-      topBrands: ["Hugo Boss", "Armani Exchange", "Kenzo"],
-      topCities: ["Mumbai", "Delhi", "Pune", "Hyderabad"],
-      conversionRate: 3.2,
-      roas: 7.8,
-    },
-    organizationId: "org_01",
-    createdAt: "2026-01-15T00:00:00.000Z",
-    updatedAt: "2026-03-27T04:00:00.000Z",
-  },
-  {
-    id: "aud_03",
-    name: "Occasional Splurgers",
-    description: "Buy luxury 1-2 times per year, typically during sales or special occasions. High AOV when they do purchase, but need strong triggers (festive, gifting).",
-    archetype: "OCCASIONAL_SPLURGER",
-    memberCount: 56800,
-    filters: {
-      totalOrders: { min: 1, max: 3 },
-      avgOrderValue: { min: 4000 },
-      lastPurchaseWithinDays: { max: 365 },
-    },
-    metaAudienceId: "23856742901236",
-    googleListId: "customers/1234567890/userLists/111222335",
-    lastSyncedAt: "2026-03-27T04:00:00.000Z",
-    metrics: {
-      avgClv: 18500,
-      avgOrderValue: 5200,
-      avgReturnRate: 20.1,
-      avgDiscountUsage: 35.8,
-      topBrands: ["Hugo Boss", "Diesel", "Kenzo"],
-      topCities: ["Delhi", "Mumbai", "Bangalore", "Chennai"],
-      conversionRate: 1.8,
-      roas: 4.2,
-    },
-    organizationId: "org_01",
-    createdAt: "2026-01-15T00:00:00.000Z",
-    updatedAt: "2026-03-27T04:00:00.000Z",
-  },
-  {
-    id: "aud_04",
-    name: "Aspirants",
-    description: "First-time visitors and browsers who have shown interest but not yet converted. Engage with content, add to wishlist, browse 3+ sessions. Entry-level luxury opportunity.",
-    archetype: "ASPIRANT",
-    memberCount: 142500,
-    filters: {
-      totalOrders: { max: 0 },
-      avgTimeOnSite: { min: 5 },
-      addToWishlist: { min: 1 },
-    },
-    metaAudienceId: "23856742901237",
-    googleListId: null,
-    lastSyncedAt: "2026-03-27T04:00:00.000Z",
-    metrics: {
-      avgClv: 0,
-      avgOrderValue: 0,
-      avgReturnRate: 0,
-      avgDiscountUsage: 0,
-      topBrands: ["Armani Exchange", "Hugo Boss", "Kenzo"],
-      topCities: ["Delhi", "Mumbai", "Bangalore", "Pune", "Ahmedabad"],
-      conversionRate: 0.6,
-      roas: 2.1,
-    },
-    organizationId: "org_01",
-    createdAt: "2026-02-01T00:00:00.000Z",
-    updatedAt: "2026-03-27T04:00:00.000Z",
-  },
-];
+const META_BASE = "https://graph.facebook.com/v25.0";
+
+async function fetchRealAudiences() {
+  const token = process.env.AJIO_LUXE_META_ACCESS_TOKEN;
+  const accountId = process.env.AJIO_LUXE_META_ACCOUNT_ID;
+  if (!token || !accountId) return [];
+
+  try {
+    const fields = "id,name,subtype,approximate_count_lower_bound,approximate_count_upper_bound,data_source,delivery_status,time_updated";
+    let url: string | null = `${META_BASE}/act_${accountId}/customaudiences?fields=${fields}&limit=200&access_token=${token}`;
+    const allAudiences: any[] = [];
+
+    while (url && allAudiences.length < 500) {
+      const resp: Response = await fetch(url);
+      const json = await resp.json();
+      if (json.data) allAudiences.push(...json.data);
+      url = json.paging?.next || null;
+    }
+
+    return allAudiences.map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      subtype: a.subtype,
+      sizeLower: a.approximate_count_lower_bound || 0,
+      sizeUpper: a.approximate_count_upper_bound || 0,
+      dataSource: a.data_source?.type || "unknown",
+      deliveryStatus: a.delivery_status?.status || "unknown",
+      lastUpdated: a.time_updated,
+    }));
+  } catch (e) {
+    console.error("[audiences] API error:", e);
+    return [];
+  }
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const archetype = searchParams.get("archetype");
+  const refresh = searchParams.get("refresh") === "true";
 
-  let audiences = [...mockAudiences];
+  const { data: audiences, fetchedAt, fromCache } = await cachedFetch(
+    "meta-audiences",
+    fetchRealAudiences,
+    refresh
+  );
 
-  if (archetype) {
-    audiences = audiences.filter((a) => a.archetype === archetype);
-  }
-
-  const totalMembers = audiences.reduce((sum, a) => sum + a.memberCount, 0);
+  const categorized = {
+    crm: audiences.filter((a: any) => a.subtype === "CUSTOM" || a.dataSource === "FILE_IMPORTED"),
+    lookalike: audiences.filter((a: any) => a.subtype === "LOOKALIKE"),
+    app: audiences.filter((a: any) => a.subtype === "APP" || a.dataSource === "APP"),
+    website: audiences.filter((a: any) => a.subtype === "WEBSITE"),
+    engagement: audiences.filter((a: any) => a.subtype === "ENGAGEMENT" || a.subtype === "IG_BUSINESS"),
+    other: audiences.filter((a: any) => !["CUSTOM", "LOOKALIKE", "APP", "WEBSITE", "ENGAGEMENT", "IG_BUSINESS"].includes(a.subtype) && a.dataSource !== "FILE_IMPORTED" && a.dataSource !== "APP"),
+  };
 
   return NextResponse.json({
-    audiences,
     total: audiences.length,
-    totalMembers,
-    archetypeDistribution: {
-      FASHION_LOYALIST: 12480,
-      URBAN_ACHIEVER: 34200,
-      OCCASIONAL_SPLURGER: 56800,
-      ASPIRANT: 142500,
-      UNCLASSIFIED: 8900,
-    },
+    categorized,
+    audiences,
+    source: fromCache ? "cache" : "live_meta_api",
+    fetchedAt,
   });
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-
-    const newAudience = {
-      id: `aud_${Date.now()}`,
-      name: body.name || "New Audience Segment",
-      description: body.description || null,
-      archetype: body.archetype || "UNCLASSIFIED",
-      memberCount: 0,
-      filters: body.filters || {},
-      metaAudienceId: null,
-      googleListId: null,
-      lastSyncedAt: null,
-      organizationId: "org_01",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      message: "Audience segment created. Member count will be calculated asynchronously.",
-    };
-
-    return NextResponse.json(newAudience, { status: 201 });
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid request body" },
-      { status: 400 }
-    );
-  }
 }

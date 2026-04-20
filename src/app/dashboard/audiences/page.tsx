@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Users,
   Crown,
@@ -118,7 +118,18 @@ function formatInr(amount: number): string {
   return `INR ${amount.toLocaleString("en-IN")}`;
 }
 
+const AUTH_AUD = "Basic " + (typeof btoa !== "undefined" ? btoa("admin:luxeai2026") : "");
+
 export default function AudiencesPage() {
+  const [realAudiences, setRealAudiences] = useState<any>(null);
+
+  useEffect(() => {
+    fetch("/api/audiences", { headers: { Authorization: AUTH_AUD } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setRealAudiences(d))
+      .catch(() => {});
+  }, []);
+
   const [selectedArchetype, setSelectedArchetype] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"archetypes" | "segments" | "builder">("archetypes");
 
@@ -142,24 +153,24 @@ export default function AudiencesPage() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
         <div className="stat-card stat-card-blue">
-          <p className="text-xs text-muted font-medium">Total Profiled</p>
-          <p className="text-2xl font-bold mt-1">{totalMembers.toLocaleString()}</p>
-          <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><ArrowUpRight size={12} /> 14.2% this month</p>
+          <p className="text-xs text-muted font-medium">Total Audiences</p>
+          <p className="text-2xl font-bold mt-1">{realAudiences ? realAudiences.total : "..."}</p>
+          <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><ArrowUpRight size={12} /> From Meta API</p>
         </div>
         <div className="stat-card stat-card-purple">
-          <p className="text-xs text-muted font-medium">Avg CLV</p>
-          <p className="text-2xl font-bold mt-1">INR 1.42L</p>
-          <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><ArrowUpRight size={12} /> 8.6% vs last quarter</p>
+          <p className="text-xs text-muted font-medium">Lookalikes</p>
+          <p className="text-2xl font-bold mt-1">{realAudiences ? realAudiences.categorized?.lookalike?.length || 0 : "..."}</p>
+          <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><ArrowUpRight size={12} /> CRM: {realAudiences ? realAudiences.categorized?.crm?.length || 0 : "..."}</p>
         </div>
         <div className="stat-card stat-card-green">
-          <p className="text-xs text-muted font-medium">Active Segments</p>
-          <p className="text-2xl font-bold mt-1">24</p>
-          <p className="text-xs text-muted mt-1">6 auto-generated</p>
+          <p className="text-xs text-muted font-medium">App Audiences</p>
+          <p className="text-2xl font-bold mt-1">{realAudiences ? realAudiences.categorized?.app?.length || 0 : "..."}</p>
+          <p className="text-xs text-muted mt-1">Web: {realAudiences ? realAudiences.categorized?.website?.length || 0 : "..."}</p>
         </div>
         <div className="stat-card stat-card-orange">
-          <p className="text-xs text-muted font-medium">Archetype Accuracy</p>
-          <p className="text-2xl font-bold mt-1">87.4%</p>
-          <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><ArrowUpRight size={12} /> +2.1% this week</p>
+          <p className="text-xs text-muted font-medium">Data Source</p>
+          <p className="text-2xl font-bold mt-1">{realAudiences ? "Live" : "..."}</p>
+          <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><ArrowUpRight size={12} /> Meta Ads API</p>
         </div>
       </div>
 
