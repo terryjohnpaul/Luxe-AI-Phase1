@@ -56,6 +56,20 @@ interface AdRecommendation {
     location: string;
     timing: string;
     platforms: { meta: string; google: string; reason: string };
+    ageRange?: string;
+    ageReason?: string;
+    gender?: string;
+    genderReason?: string;
+    locationReason?: string;
+    interests?: string[];
+    placements?: string[];
+    placementReason?: string;
+    devices?: string[];
+    deviceReason?: string;
+    audiences?: string[];
+    exclusions?: string[];
+    languages?: string[];
+    optimizationGoal?: string;
   };
   budget: {
     suggested: string;
@@ -262,7 +276,7 @@ function SuggestedProducts({ recIndex }: { recIndex: number }) {
         )}
       </div>
 
-      <div ref={scrollRef} className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <div ref={scrollRef} className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin" style={{maxWidth: "calc(100vw - 560px)"}}>
         {displayProducts.map((product) => (
           <div
             key={product.id}
@@ -688,6 +702,51 @@ export default function CommandCenterPage() {
                             <span className="text-gray-300">|</span>
                             <span className="text-xs flex items-center gap-1"><BarChart3 size={11} className="text-green-600" /><span className="text-muted">ROAS</span> <span className={cn("font-semibold", parseFloat(rec.prediction.estimatedROAS) >= 2 ? "text-green-600" : parseFloat(rec.prediction.estimatedROAS) >= 1 ? "text-amber-600" : "text-red-500")}>{rec.prediction.estimatedROAS}</span></span>
                           </div>
+                          {/* Targeting */}
+                          {rec.targeting?.ageRange && (
+                            <div className="mt-2 pt-2 border-t border-card-border/50">
+                              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-[10px]">
+                                <div className="bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1">
+                                  <p className="text-blue-400/70 text-[8px]">Age</p>
+                                  <p className="text-blue-400 font-medium">{rec.targeting.ageRange}</p>
+                                  {rec.targeting.ageReason && <p className="text-blue-400/50 text-[7px] truncate" title={rec.targeting.ageReason}>{rec.targeting.ageReason}</p>}
+                                </div>
+                                <div className="bg-purple-500/10 border border-purple-500/20 rounded px-2 py-1">
+                                  <p className="text-purple-400/70 text-[8px]">Gender</p>
+                                  <p className="text-purple-400 font-medium">{rec.targeting.gender}</p>
+                                  {rec.targeting.genderReason && <p className="text-purple-400/50 text-[7px] truncate" title={rec.targeting.genderReason}>{rec.targeting.genderReason}</p>}
+                                </div>
+                                <div className="bg-green-500/10 border border-green-500/20 rounded px-2 py-1">
+                                  <p className="text-green-400/70 text-[8px]">Location</p>
+                                  <p className="text-green-400 font-medium truncate">{rec.targeting.location}</p>
+                                  {rec.targeting.locationReason && <p className="text-green-400/50 text-[7px] truncate" title={rec.targeting.locationReason}>{rec.targeting.locationReason}</p>}
+                                </div>
+                                <div className="bg-orange-500/10 border border-orange-500/20 rounded px-2 py-1">
+                                  <p className="text-orange-400/70 text-[8px]">Device</p>
+                                  <p className="text-orange-400 font-medium truncate">{rec.targeting.devices?.[0] || "Android first"}</p>
+                                  {rec.targeting.deviceReason && <p className="text-orange-400/50 text-[7px] truncate" title={rec.targeting.deviceReason}>{rec.targeting.deviceReason}</p>}
+                                </div>
+                                <div className="bg-pink-500/10 border border-pink-500/20 rounded px-2 py-1">
+                                  <p className="text-pink-400/70 text-[8px]">Placement</p>
+                                  <p className="text-pink-400 font-medium truncate">{rec.targeting.placements?.[0] || "IG Reels"}</p>
+                                  {rec.targeting.placementReason && <p className="text-pink-400/50 text-[7px] truncate" title={rec.targeting.placementReason}>{rec.targeting.placementReason}</p>}
+                                </div>
+                                <div className="bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1">
+                                  <p className="text-amber-400/70 text-[8px]">Optimize for</p>
+                                  <p className="text-amber-400 font-medium">{rec.targeting.optimizationGoal}</p>
+                                </div>
+                              </div>
+                              <div className="mt-1.5 space-y-0.5 text-[10px] text-muted">
+                                <p className="truncate"><span className="font-medium text-gray-400">Interests:</span> {rec.targeting.interests?.slice(0, 5).join(", ")}</p>
+                                {rec.targeting.audiences && rec.targeting.audiences.length > 0 && (
+                                  <p className="truncate"><span className="font-medium text-gray-400">Audiences:</span> {rec.targeting.audiences.slice(0, 3).join(", ")}</p>
+                                )}
+                                {rec.targeting.exclusions && rec.targeting.exclusions.length > 0 && (
+                                  <p className="truncate"><span className="font-medium text-gray-400">Exclude:</span> {rec.targeting.exclusions.join(", ")}</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                           {/* Why we predict this */}
                           <div className="mt-2 pt-2 border-t border-card-border/50">
                             <div className="flex items-start gap-1.5">
@@ -703,35 +762,9 @@ export default function CommandCenterPage() {
 
                         {/* Suggested Products Strip */}
                         <SuggestedProducts recIndex={recIdx} />
-                      </div>
 
-                      <div className="flex items-center gap-3 shrink-0">
-                        {/* Success Probability Ring */}
-                        <div className="flex flex-col items-center gap-0.5">
-                          <div className="relative w-12 h-12">
-                            <svg className="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
-                              <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100" />
-                              <circle cx="24" cy="24" r="20" fill="none" strokeWidth="3"
-                                strokeDasharray={`${(rec.prediction.confidence / 100) * 125.6} 125.6`}
-                                strokeLinecap="round"
-                                className={cn(
-                                  rec.prediction.confidence >= 80 ? "text-emerald-500" :
-                                  rec.prediction.confidence >= 60 ? "text-blue-500" :
-                                  rec.prediction.confidence >= 40 ? "text-amber-500" : "text-red-400"
-                                )} />
-                            </svg>
-                            <span className={cn("absolute inset-0 flex items-center justify-center text-xs font-bold",
-                              rec.prediction.confidence >= 80 ? "text-emerald-600" :
-                              rec.prediction.confidence >= 60 ? "text-blue-600" :
-                              rec.prediction.confidence >= 40 ? "text-amber-600" : "text-red-500"
-                            )}>
-                              {rec.prediction.confidence}%
-                            </span>
-                          </div>
-                          <span className="text-[9px] text-muted font-medium">Success</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 mt-3 flex-wrap">
                           {!isApproved && !isSkipped && (
                             <>
                               <button onClick={() => startEditing(rec)} className="text-xs text-muted hover:text-text-primary flex items-center gap-1 px-2 py-1 rounded hover:bg-surface transition-colors">
@@ -766,6 +799,33 @@ export default function CommandCenterPage() {
                           )}
                           {isApproved && !pushResult[rec.id] && <span className="text-xs font-medium text-green-700 bg-green-50 px-3 py-1.5 rounded-lg flex items-center gap-1.5"><Check size={13} /> Approved</span>}
                           {isSkipped && <span className="text-xs text-muted bg-surface px-3 py-1.5 rounded-lg flex items-center gap-1.5"><X size={13} /> Skipped</span>}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-center shrink-0">
+                        {/* Success Probability Ring */}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div className="relative w-9 h-9">
+                            <svg className="w-9 h-9 -rotate-90" viewBox="0 0 48 48">
+                              <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="3" className="text-gray-100" />
+                              <circle cx="24" cy="24" r="20" fill="none" strokeWidth="3"
+                                strokeDasharray={`${(rec.prediction.confidence / 100) * 125.6} 125.6`}
+                                strokeLinecap="round"
+                                className={cn(
+                                  rec.prediction.confidence >= 80 ? "text-emerald-500" :
+                                  rec.prediction.confidence >= 60 ? "text-blue-500" :
+                                  rec.prediction.confidence >= 40 ? "text-amber-500" : "text-red-400"
+                                )} />
+                            </svg>
+                            <span className={cn("absolute inset-0 flex items-center justify-center text-[10px] font-bold",
+                              rec.prediction.confidence >= 80 ? "text-emerald-600" :
+                              rec.prediction.confidence >= 60 ? "text-blue-600" :
+                              rec.prediction.confidence >= 40 ? "text-amber-600" : "text-red-500"
+                            )}>
+                              {rec.prediction.confidence}%
+                            </span>
+                          </div>
+                          <span className="text-[8px] text-muted font-medium">Success</span>
                         </div>
                       </div>
                     </div>

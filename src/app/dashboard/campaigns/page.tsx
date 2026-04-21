@@ -1,733 +1,1576 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   RefreshCw,
   Loader2,
   AlertTriangle,
   Play,
   Pause,
-  Target,
-  DollarSign,
-  Eye,
-  MousePointerClick,
-  TrendingUp,
-  Calendar,
-  MapPin,
-  Users,
-  ExternalLink,
-  Filter,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Pencil,
-  Check,
+  Brain,
+  ExternalLink,
   X,
-  Trash2,
-  Archive,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils/cn";
+
+// ── Types ─────────────────────────────────────────────────────
+interface CampaignMetrics {
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  conversions: number;
+  conversionValue: number;
+  roas: number;
+  cpa: number;
+  cpc: number;
+}
 
 interface Campaign {
   id: string;
+  dbId?: string;
   platform: string;
   name: string;
   status: string;
-  objective: string;
+  campaignType: string;
   dailyBudget: number;
-  bidStrategy: string;
-  targeting: string;
-  adSets: number;
-  createdAt: string;
-  updatedAt: string;
-  startTime: string;
-  metrics: {
-    spend: number;
-    impressions: number;
-    clicks: number;
-    ctr: number;
-    cpc: number;
-    conversions: number;
-    conversionValue: number;
-    roas: number;
-  };
+  metrics: CampaignMetrics;
+}
+
+interface Stats {
+  total: number;
+  meta: number;
+  google: number;
+  active: number;
+  paused: number;
+  totalSpend: number;
+  totalPages: number;
 }
 
 interface ApiResponse {
   campaigns: Campaign[];
-  stats: {
-    total: number;
-    active: number;
-    paused: number;
-    totalSpend: number;
-  };
+  stats: Stats;
 }
 
-function formatCurrency(value: number): string {
-  if (value === 0) return "₹0";
-  return "₹" + value.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+interface EditFields {
+  name: string;
+  status: string;
+  dailyBudget: string;
+  spendCap: string;
+  bidStrategy: string;
+  startTime: string;
+  stopTime: string;
 }
 
-function formatNumber(value: number): string {
-  if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-  if (value >= 1000) return (value / 1000).toFixed(1) + "K";
-  return value.toString();
+interface AdSetData {
+  id: string;
+  name: string;
+  status: string;
+  dailyBudget: number | null;
+  lifetimeBudget: number | null;
+  optimizationGoal: string;
+  billingEvent: string;
+  bidStrategy: string;
+  bidAmount: number | null;
+  targeting: any;
+  startTime: string;
+  endTime: string;
+  promotedObject: any;
+  pacingType: string[];
 }
 
-function timeAgo(dateStr: string): string {
-  if (!dateStr) return "—";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return mins + "m ago";
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return hours + "h ago";
-  const days = Math.floor(hours / 24);
-  return days + "d ago";
+interface AdData {
+  id: string;
+  name: string;
+  status: string;
+  creative: {
+    id: string;
+    title: string;
+    body: string;
+    callToAction: string;
+    imageUrl: string;
+    thumbnailUrl: string;
+  } | null;
 }
 
-function StatusBadge({ status }: { status: string }) {
+interface AdSetEditFields {
+  name: string;
+  status: string;
+  dailyBudget: string;
+  lifetimeBudget: string;
+  optimizationGoal: string;
+  bidStrategy: string;
+  bidAmount: string;
+  ageMin: string;
+  ageMax: string;
+  gender: string;
+  geoLocations: any;
+  platforms: string[];
+  igPlacements: string[];
+  fbPlacements: string[];
+  devices: string[];
+  startTime: string;
+  endTime: string;
+  customAudiences: any[];
+  excludedCustomAudiences: any[];
+}
+
+interface AdEditFields {
+  name: string;
+  status: string;
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+const fmtINR = (v: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
+const fmtNum = (v: number) => new Intl.NumberFormat("en-IN").format(Math.round(v));
+const AUTH = "Basic " + (typeof btoa !== "undefined" ? btoa("admin:luxeai2026") : "");
+
+const safe = (v: unknown): number => {
+  if (v === null || v === undefined || v === "") return 0;
+  const n = Number(v);
+  return isNaN(n) || !isFinite(n) ? 0 : n;
+};
+
+type SortKey = "spend" | "roas" | "conversions" | "cpa" | "ctr" | "impressions";
+
+const ACCOUNT_ID = "202330961584003";
+
+const BID_STRATEGIES = [
+  { value: "LOWEST_COST_WITHOUT_CAP", label: "Lowest Cost" },
+  { value: "LOWEST_COST_WITH_BID_CAP", label: "Bid Cap" },
+  { value: "COST_CAP", label: "Cost Cap" },
+];
+
+const OPTIMIZATION_GOALS = [
+  { value: "LINK_CLICKS", label: "Link Clicks" },
+  { value: "LANDING_PAGE_VIEWS", label: "Landing Page Views" },
+  { value: "IMPRESSIONS", label: "Impressions" },
+  { value: "OFFSITE_CONVERSIONS", label: "Conversions" },
+  { value: "REACH", label: "Reach" },
+];
+
+const IG_PLACEMENTS = [
+  { value: "stream", label: "Feed" },
+  { value: "story", label: "Stories" },
+  { value: "reels", label: "Reels" },
+  { value: "explore_home", label: "Explore" },
+  { value: "ig_search", label: "Search" },
+  { value: "profile_feed", label: "Profile" },
+];
+
+const FB_PLACEMENTS = [
+  { value: "feed", label: "Feed" },
+  { value: "video_feeds", label: "Video Feeds" },
+  { value: "story", label: "Stories" },
+  { value: "reels", label: "Reels" },
+  { value: "marketplace", label: "Marketplace" },
+];
+
+const PLATFORM_OPTIONS = [
+  { value: "instagram", label: "Instagram" },
+  { value: "facebook", label: "Facebook" },
+  { value: "audience_network", label: "Audience Network" },
+];
+
+const DEVICE_OPTIONS = [
+  { value: "mobile", label: "Mobile" },
+  { value: "desktop", label: "Desktop" },
+];
+
+function toDateInput(isoStr: string): string {
+  if (!isoStr) return "";
+  try {
+    return new Date(isoStr).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+}
+
+function genderFromArray(arr: number[] | undefined): string {
+  if (!arr || arr.length === 0) return "all";
+  if (arr.includes(1) && arr.length === 1) return "male";
+  if (arr.includes(2) && arr.length === 1) return "female";
+  return "all";
+}
+
+// ── Skeleton ──────────────────────────────────────────────────
+function CardSkeleton() {
   return (
-    <span className={cn(
-      "text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 w-fit",
-      status === "ACTIVE" && "bg-green-100 text-green-700",
-      status === "PAUSED" && "bg-yellow-100 text-yellow-700",
-      status === "ARCHIVED" && "bg-gray-100 text-gray-500",
-      status === "DELETED" && "bg-red-100 text-red-700",
-    )}>
-      {status === "ACTIVE" && <Play size={8} />}
-      {status === "PAUSED" && <Pause size={8} />}
-      {status}
-    </span>
+    <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-6 animate-pulse">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="h-5 w-14 bg-gray-700 rounded" />
+        <div className="h-5 w-16 bg-gray-700 rounded-full" />
+        <div className="h-5 w-12 bg-gray-700 rounded" />
+        <div className="h-5 w-64 bg-gray-700 rounded" />
+      </div>
+      <div className="flex gap-6">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="space-y-1">
+            <div className="h-3 w-14 bg-gray-700/60 rounded" />
+            <div className="h-4 w-20 bg-gray-700/40 rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function ObjectiveBadge({ objective }: { objective: string }) {
-  const labels: Record<string, string> = {
-    "OUTCOME_SALES": "Sales",
-    "OUTCOME_TRAFFIC": "Traffic",
-    "OUTCOME_AWARENESS": "Awareness",
-    "OUTCOME_LEADS": "Leads",
-    "OUTCOME_ENGAGEMENT": "Engagement",
-  };
-  return (
-    <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-      {labels[objective] || objective}
-    </span>
-  );
-}
-
+// ── Main Page ─────────────────────────────────────────────────
 export default function CampaignsPage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [platformFilter, setPlatformFilter] = useState("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<SortKey>("spend");
+  const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
+
+  // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editLoading, setEditLoading] = useState(false);
-  const [campaignEdit, setCampaignEdit] = useState<any>({});
-  const [adSetEdits, setAdSetEdits] = useState<any[]>([]);
-  const [updating, setUpdating] = useState<string | null>(null);
+  const [editTab, setEditTab] = useState<"campaign" | "adsets" | "ads">("campaign");
+  const [editData, setEditData] = useState<Record<string, EditFields>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ id: string; ok: boolean; text: string } | null>(null);
 
-  const startEdit = async (campaign: Campaign) => {
-    setEditingId(campaign.id);
-    setEditLoading(true);
-    try {
-      const res = await fetch(`/api/campaigns/${campaign.id}`);
-      const data = await res.json();
-      const c = data.campaign || {};
-      setCampaignEdit({
-        name: c.name || "",
-        status: c.status || "PAUSED",
-        daily_budget: c.daily_budget ? parseInt(c.daily_budget) / 100 : 0,
-        lifetime_budget: c.lifetime_budget ? parseInt(c.lifetime_budget) / 100 : 0,
-        spend_cap: c.spend_cap ? parseInt(c.spend_cap) / 100 : 0,
-        bid_strategy: c.bid_strategy || "LOWEST_COST_WITHOUT_CAP",
-        start_time: c.start_time ? c.start_time.split("T")[0] : "",
-        stop_time: c.stop_time ? c.stop_time.split("T")[0] : "",
-        special_ad_categories: c.special_ad_categories || [],
-      });
-      setAdSetEdits((data.adSets || []).map((as: any) => ({
-        id: as.id,
-        name: as.name || "",
-        status: as.status || "PAUSED",
-        daily_budget: as.daily_budget ? parseInt(as.daily_budget) / 100 : 0,
-        lifetime_budget: as.lifetime_budget ? parseInt(as.lifetime_budget) / 100 : 0,
-        bid_amount: as.bid_amount || 0,
-        bid_strategy: as.bid_strategy || "",
-        billing_event: as.billing_event || "IMPRESSIONS",
-        optimization_goal: as.optimization_goal || "OFFSITE_CONVERSIONS",
-        start_time: as.start_time ? as.start_time.split("T")[0] : "",
-        end_time: as.end_time ? as.end_time.split("T")[0] : "",
-        targeting: as.targeting || {},
-        // Flattened targeting for UI
-        _countries: as.targeting?.geo_locations?.countries?.join(", ") || "IN",
-        _cities: as.targeting?.geo_locations?.cities?.map((c: any) => c.name).join(", ") || "",
-        _age_min: as.targeting?.age_min || 18,
-        _age_max: as.targeting?.age_max || 65,
-        _genders: as.targeting?.genders?.[0] === 1 ? "male" : as.targeting?.genders?.[0] === 2 ? "female" : "all",
-        _interests: as.targeting?.flexible_spec?.[0]?.interests?.map((i: any) => i.name).join(", ") || "",
-        _platforms: as.targeting?.publisher_platforms?.join(", ") || "facebook, instagram",
-      })));
-    } catch (err: any) {
-      alert("Error loading campaign details: " + err.message);
-      setEditingId(null);
-    } finally {
-      setEditLoading(false);
-    }
-  };
+  // Ad Sets state
+  const [adSets, setAdSets] = useState<Record<string, AdSetData[]>>({});
+  const [adSetsLoading, setAdSetsLoading] = useState<string | null>(null);
+  const [adSetEdits, setAdSetEdits] = useState<Record<string, AdSetEditFields>>({});
+  const [adSetSaving, setAdSetSaving] = useState<string | null>(null);
+  const [adSetSaveMsg, setAdSetSaveMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setCampaignEdit({});
-    setAdSetEdits([]);
-  };
+  // Ads state
+  const [ads, setAds] = useState<Record<string, AdData[]>>({});
+  const [adsLoading, setAdsLoading] = useState<string | null>(null);
+  const [adEdits, setAdEdits] = useState<Record<string, AdEditFields>>({});
+  const [adSaving, setAdSaving] = useState<string | null>(null);
+  const [adSaveMsg, setAdSaveMsg] = useState<Record<string, { ok: boolean; text: string }>>({});
 
-  const saveEdit = async (campaignId: string) => {
-    setUpdating(campaignId);
-    try {
-      // Build targeting objects from flattened fields
-      const adSets = adSetEdits.map(as => {
-        const countries = as._countries.split(",").map((c: string) => c.trim().toUpperCase()).filter(Boolean);
-        const targeting: any = {
-          geo_locations: { countries },
-          age_min: as._age_min,
-          age_max: as._age_max,
-          publisher_platforms: as._platforms.split(",").map((p: string) => p.trim()).filter(Boolean),
-        };
-        if (as._genders === "male") targeting.genders = [1];
-        else if (as._genders === "female") targeting.genders = [2];
+  // Analyze state
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [analyzeLoading, setAnalyzeLoading] = useState<string | null>(null);
+  const [analyzeResults, setAnalyzeResults] = useState<Record<string, any>>({});
 
-        return {
-          id: as.id,
-          name: as.name,
-          status: as.status,
-          daily_budget: as.daily_budget,
-          lifetime_budget: as.lifetime_budget || undefined,
-          bid_amount: as.bid_amount || undefined,
-          bid_strategy: as.bid_strategy || undefined,
-          billing_event: as.billing_event,
-          optimization_goal: as.optimization_goal,
-          start_time: as.start_time || undefined,
-          end_time: as.end_time || undefined,
-          targeting,
-        };
-      });
-
-      const res = await fetch(`/api/campaigns/${campaignId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          campaign: campaignEdit,
-          adSets,
-        }),
-      });
-      const data = await res.json();
-      if (!data.success) {
-        alert("Error: " + (data.message || data.error));
-      } else {
-        alert("All changes saved to Facebook!");
-        setEditingId(null);
-        fetchData();
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const toggleStatus = async (campaign: Campaign) => {
-    const newStatus = campaign.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
-    setUpdating(campaign.id);
-    try {
-      const res = await fetch(`/api/campaigns/${campaign.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        alert("Error: " + data.error);
-      } else {
-        fetchData();
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const archiveCampaign = async (campaignId: string) => {
-    if (!confirm("Archive this campaign? This will stop it permanently.")) return;
-    setUpdating(campaignId);
-    try {
-      const res = await fetch(`/api/campaigns/${campaignId}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.error) {
-        alert("Error: " + data.error);
-      } else {
-        fetchData();
-      }
-    } catch (err: any) {
-      alert("Error: " + err.message);
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const queryParts: string[] = [];
-      if (statusFilter !== "all") queryParts.push(`status=${statusFilter}`);
-      if (platformFilter !== "all") queryParts.push(`platform=${platformFilter}`);
-      const params = queryParts.length > 0 ? "?" + queryParts.join("&") : "";
-      const res = await fetch(`/api/campaigns${params}`);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: "50",
+        status: statusFilter,
+        search,
+        sortBy,
+        sortDir,
+      });
+      const res = await fetch(`/api/campaigns?${params.toString()}`, {
+        headers: { Authorization: AUTH },
+      });
       if (!res.ok) throw new Error(`API returned ${res.status}`);
-      const d = await res.json();
-      setData(d);
-    } catch (err: any) {
-      setError(err.message);
+      setData(await res.json());
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter, search, page, sortBy, sortDir]);
 
   useEffect(() => {
     fetchData();
-  }, [statusFilter, platformFilter]);
+  }, [fetchData]);
 
-  if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center h-[60vh]">
-        <div className="text-center">
-          <Loader2 size={32} className="animate-spin text-brand-blue mx-auto mb-4" />
-          <p className="text-sm text-muted">Fetching campaigns from Meta Ads...</p>
-        </div>
-      </div>
-    );
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const handleSort = (key: SortKey) => {
+    if (sortBy === key) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortBy(key);
+      setSortDir("desc");
+    }
+    setPage(1);
+  };
+
+  // ── Edit handlers ──
+  const toggleEdit = (c: Campaign) => {
+    if (editingId === c.id) {
+      setEditingId(null);
+      setEditTab("campaign");
+      return;
+    }
+    setEditData((prev) => ({
+      ...prev,
+      [c.id]: {
+        name: c.name || "",
+        status: c.status || "PAUSED",
+        dailyBudget: c.dailyBudget > 0 ? String(c.dailyBudget) : "",
+        spendCap: "",
+        bidStrategy: "LOWEST_COST_WITHOUT_CAP",
+        startTime: "",
+        stopTime: "",
+      },
+    }));
+    setEditingId(c.id);
+    setEditTab("campaign");
+    setSaveMsg(null);
+  };
+
+  const updateEditField = (campaignId: string, field: keyof EditFields, value: string) => {
+    setEditData((prev) => ({
+      ...prev,
+      [campaignId]: { ...prev[campaignId], [field]: value },
+    }));
+  };
+
+  const handleSave = async (campaignId: string) => {
+    const fields = editData[campaignId];
+    if (!fields) return;
+
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const body: Record<string, unknown> = {};
+      if (fields.name) body.name = fields.name;
+      if (fields.status) body.status = fields.status;
+      if (fields.dailyBudget) body.dailyBudget = parseFloat(fields.dailyBudget);
+      if (fields.spendCap) body.spendCap = parseFloat(fields.spendCap);
+      if (fields.bidStrategy) body.bidStrategy = fields.bidStrategy;
+      if (fields.startTime) body.startTime = new Date(fields.startTime).toISOString();
+      if (fields.stopTime) body.stopTime = new Date(fields.stopTime).toISOString();
+
+      const res = await fetch(`/api/campaigns/${campaignId}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: AUTH },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+
+      if (result.success) {
+        setSaveMsg({ id: campaignId, ok: true, text: "Saved! Refreshing..." });
+        setTimeout(() => {
+          setSaveMsg(null);
+          fetchData();
+        }, 1200);
+      } else {
+        setSaveMsg({ id: campaignId, ok: false, text: result.error || "Failed to save" });
+      }
+    } catch (err: unknown) {
+      setSaveMsg({ id: campaignId, ok: false, text: err instanceof Error ? err.message : "Network error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Ad Sets handlers ──
+  const loadAdSets = async (campaignId: string) => {
+    if (adSets[campaignId]) return; // already loaded
+    setAdSetsLoading(campaignId);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/adsets`, {
+        headers: { Authorization: AUTH },
+      });
+      const data = await res.json();
+      const items: AdSetData[] = data.adsets || [];
+      setAdSets((prev) => ({ ...prev, [campaignId]: items }));
+      // Pre-fill edit state for each ad set
+      const newEdits: Record<string, AdSetEditFields> = {};
+      for (const as of items) {
+        newEdits[as.id] = adSetToEditFields(as);
+      }
+      setAdSetEdits((prev) => ({ ...prev, ...newEdits }));
+    } catch (err) {
+      console.error("Failed to load ad sets:", err);
+    } finally {
+      setAdSetsLoading(null);
+    }
+  };
+
+  function adSetToEditFields(as: AdSetData): AdSetEditFields {
+    const t = as.targeting || {};
+    return {
+      name: as.name || "",
+      status: as.status || "PAUSED",
+      dailyBudget: as.dailyBudget ? String(as.dailyBudget) : "",
+      lifetimeBudget: as.lifetimeBudget ? String(as.lifetimeBudget) : "",
+      optimizationGoal: as.optimizationGoal || "LINK_CLICKS",
+      bidStrategy: as.bidStrategy || "LOWEST_COST_WITHOUT_CAP",
+      bidAmount: as.bidAmount ? String(as.bidAmount) : "",
+      ageMin: String(t.age_min || 18),
+      ageMax: String(t.age_max || 65),
+      gender: genderFromArray(t.genders),
+      geoLocations: t.geo_locations || { countries: ["IN"] },
+      platforms: t.publisher_platforms || ["instagram", "facebook"],
+      igPlacements: t.instagram_positions || [],
+      fbPlacements: t.facebook_positions || [],
+      devices: t.device_platforms || ["mobile", "desktop"],
+      startTime: toDateInput(as.startTime),
+      endTime: toDateInput(as.endTime),
+      customAudiences: t.custom_audiences || [],
+      excludedCustomAudiences: t.excluded_custom_audiences || [],
+    };
   }
 
-  if (error) {
-    return (
-      <div className="p-6 flex items-center justify-center h-[60vh]">
-        <div className="text-center">
-          <AlertTriangle size={32} className="text-red-500 mx-auto mb-4" />
-          <p className="text-sm text-red-600 font-medium mb-2">Failed to load campaigns</p>
-          <p className="text-xs text-muted mb-4">{error}</p>
-          <button onClick={fetchData} className="btn-secondary">
-            <RefreshCw size={14} /> Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const updateAdSetField = (adsetId: string, field: keyof AdSetEditFields, value: any) => {
+    setAdSetEdits((prev) => ({
+      ...prev,
+      [adsetId]: { ...prev[adsetId], [field]: value },
+    }));
+  };
 
-  if (!data) return null;
+  const toggleArrayItem = (adsetId: string, field: "platforms" | "igPlacements" | "fbPlacements" | "devices", value: string) => {
+    setAdSetEdits((prev) => {
+      const current = prev[adsetId]?.[field] || [];
+      const next = current.includes(value)
+        ? current.filter((v: string) => v !== value)
+        : [...current, value];
+      return { ...prev, [adsetId]: { ...prev[adsetId], [field]: next } };
+    });
+  };
+
+  const saveAdSet = async (adsetId: string) => {
+    const edits = adSetEdits[adsetId];
+    if (!edits) return;
+
+    setAdSetSaving(adsetId);
+    setAdSetSaveMsg((prev) => {
+      const next = { ...prev };
+      delete next[adsetId];
+      return next;
+    });
+
+    try {
+      const targeting: any = {
+        age_min: Number(edits.ageMin) || 18,
+        age_max: Number(edits.ageMax) || 65,
+        genders: edits.gender === "male" ? [1] : edits.gender === "female" ? [2] : [],
+        publisher_platforms: edits.platforms,
+        instagram_positions: edits.igPlacements.length > 0 ? edits.igPlacements : undefined,
+        facebook_positions: edits.fbPlacements.length > 0 ? edits.fbPlacements : undefined,
+        device_platforms: edits.devices,
+        geo_locations: edits.geoLocations,
+      };
+      // Preserve custom audiences
+      if (edits.customAudiences.length > 0) {
+        targeting.custom_audiences = edits.customAudiences;
+      }
+      if (edits.excludedCustomAudiences.length > 0) {
+        targeting.excluded_custom_audiences = edits.excludedCustomAudiences;
+      }
+      // Remove undefined keys
+      Object.keys(targeting).forEach((k) => targeting[k] === undefined && delete targeting[k]);
+
+      const body: any = {
+        name: edits.name,
+        status: edits.status,
+        optimizationGoal: edits.optimizationGoal,
+        bidStrategy: edits.bidStrategy,
+        targeting,
+      };
+      if (edits.dailyBudget) body.dailyBudget = edits.dailyBudget;
+      if (edits.lifetimeBudget) body.lifetimeBudget = edits.lifetimeBudget;
+      if (edits.bidAmount && (edits.bidStrategy === "COST_CAP" || edits.bidStrategy === "LOWEST_COST_WITH_BID_CAP")) {
+        body.bidAmount = edits.bidAmount;
+      }
+      if (edits.startTime) body.startTime = new Date(edits.startTime).toISOString();
+      if (edits.endTime) body.endTime = new Date(edits.endTime).toISOString();
+
+      const res = await fetch(`/api/adsets/${adsetId}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: AUTH },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+
+      if (result.success) {
+        setAdSetSaveMsg((prev) => ({ ...prev, [adsetId]: { ok: true, text: "Saved!" } }));
+      } else {
+        setAdSetSaveMsg((prev) => ({ ...prev, [adsetId]: { ok: false, text: result.error || "Failed" } }));
+      }
+    } catch (err: any) {
+      setAdSetSaveMsg((prev) => ({ ...prev, [adsetId]: { ok: false, text: err.message || "Network error" } }));
+    } finally {
+      setAdSetSaving(null);
+    }
+  };
+
+  // ── Ads handlers ──
+  const loadAds = async (campaignId: string) => {
+    if (ads[campaignId]) return;
+    setAdsLoading(campaignId);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/ads`, {
+        headers: { Authorization: AUTH },
+      });
+      const data = await res.json();
+      const items: AdData[] = data.ads || [];
+      setAds((prev) => ({ ...prev, [campaignId]: items }));
+      // Pre-fill edit state
+      const newEdits: Record<string, AdEditFields> = {};
+      for (const ad of items) {
+        newEdits[ad.id] = { name: ad.name || "", status: ad.status || "PAUSED" };
+      }
+      setAdEdits((prev) => ({ ...prev, ...newEdits }));
+    } catch (err) {
+      console.error("Failed to load ads:", err);
+    } finally {
+      setAdsLoading(null);
+    }
+  };
+
+  const saveAd = async (adId: string) => {
+    const edits = adEdits[adId];
+    if (!edits) return;
+
+    setAdSaving(adId);
+    setAdSaveMsg((prev) => {
+      const next = { ...prev };
+      delete next[adId];
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/ads/${adId}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: AUTH },
+        body: JSON.stringify({ name: edits.name, status: edits.status }),
+      });
+      const result = await res.json();
+
+      if (result.success) {
+        setAdSaveMsg((prev) => ({ ...prev, [adId]: { ok: true, text: "Saved!" } }));
+      } else {
+        setAdSaveMsg((prev) => ({ ...prev, [adId]: { ok: false, text: result.error || "Failed" } }));
+      }
+    } catch (err: any) {
+      setAdSaveMsg((prev) => ({ ...prev, [adId]: { ok: false, text: err.message || "Network error" } }));
+    } finally {
+      setAdSaving(null);
+    }
+  };
+
+  // ── Tab click ──
+  const handleTabClick = (tab: "campaign" | "adsets" | "ads", campaignId: string) => {
+    setEditTab(tab);
+    if (tab === "adsets") loadAdSets(campaignId);
+    if (tab === "ads") loadAds(campaignId);
+  };
+
+  // ── Analyze handler ──
+  const handleAnalyze = async (c: Campaign) => {
+    if (analyzingId === c.id) {
+      setAnalyzingId(null);
+      return;
+    }
+    setAnalyzingId(c.id);
+    if (analyzeResults[c.id]) return;
+
+    setAnalyzeLoading(c.id);
+    try {
+      const res = await fetch(`/api/campaigns/${c.id}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: AUTH },
+        body: JSON.stringify({
+          name: c.name,
+          status: c.status,
+          spend: safe(c.metrics?.spend),
+          roas: safe(c.metrics?.roas),
+          cpa: safe(c.metrics?.cpa),
+          ctr: safe(c.metrics?.ctr),
+          conversions: safe(c.metrics?.conversions),
+          conversionValue: safe(c.metrics?.conversionValue),
+          impressions: safe(c.metrics?.impressions),
+          clicks: safe(c.metrics?.clicks),
+          dailyBudget: c.dailyBudget || 0,
+        }),
+      });
+      const result = await res.json();
+      setAnalyzeResults((prev) => ({ ...prev, [c.id]: result }));
+    } catch {
+      setAnalyzeResults((prev) => ({ ...prev, [c.id]: ["Failed to analyze. Try again."] }));
+    } finally {
+      setAnalyzeLoading(null);
+    }
+  };
+
+  const stats = data?.stats;
+  const campaigns = data?.campaigns || [];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="min-h-screen bg-[#0B1120] p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">My Campaigns</h1>
-          <p className="text-sm text-muted mt-1">
-            All campaigns from your connected Facebook & Google Ads accounts
+          <h1 className="text-2xl font-bold text-gray-100 mb-1">Campaigns</h1>
+          <p className="text-sm text-gray-400">
+            {stats ? `${stats.total} campaigns from Meta Ads (live)` : "Loading..."}
           </p>
         </div>
-        <button onClick={fetchData} disabled={loading} className="btn-secondary">
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Refresh
+        <button
+          onClick={fetchData}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700/50 text-sm text-gray-300 hover:text-gray-100 transition-colors disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          Refresh
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
-        <div className="stat-card stat-card-blue">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs text-muted font-medium">Total Campaigns</p>
-              <p className="text-2xl font-bold mt-1">{data.stats.total}</p>
+      {/* Stats Bar */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          {[
+            { label: "Total Campaigns", value: fmtNum(stats.total) },
+            { label: "Meta", value: fmtNum(stats.meta), accent: "text-blue-400" },
+            { label: "Google", value: fmtNum(stats.google), accent: "text-emerald-400" },
+            { label: "Active", value: fmtNum(stats.active), accent: "text-green-400" },
+            { label: "Total Spend", value: fmtINR(safe(stats.totalSpend)), accent: "text-purple-400" },
+          ].map((s) => (
+            <div key={s.label} className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
+              <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{s.label}</p>
+              <p className={`text-xl font-bold mt-1 ${s.accent || "text-gray-100"}`}>{s.value}</p>
             </div>
-            <Target size={18} className="text-muted" />
-          </div>
+          ))}
         </div>
-        <div className="stat-card stat-card-green">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs text-muted font-medium">Active</p>
-              <p className="text-2xl font-bold mt-1">{data.stats.active}</p>
-            </div>
-            <Play size={18} className="text-muted" />
-          </div>
-        </div>
-        <div className="stat-card stat-card-yellow">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs text-muted font-medium">Paused / Draft</p>
-              <p className="text-2xl font-bold mt-1">{data.stats.paused}</p>
-            </div>
-            <Pause size={18} className="text-muted" />
-          </div>
-        </div>
-        <div className="stat-card stat-card-purple">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs text-muted font-medium">Total Spend</p>
-              <p className="text-2xl font-bold mt-1">{formatCurrency(data.stats.totalSpend)}</p>
-            </div>
-            <DollarSign size={18} className="text-muted" />
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Filters */}
-      <div className="flex gap-4 items-center">
-        <div className="flex gap-2 items-center">
-          <span className="text-xs text-muted font-medium">Status:</span>
-          {["all", "ACTIVE", "PAUSED"].map(s => (
+      <div className="flex flex-wrap gap-3 items-center mb-4">
+        {/* Status tabs */}
+        <div className="flex items-center gap-1 bg-gray-800/60 rounded-lg p-1">
+          {[
+            { key: "all", label: "All" },
+            { key: "ACTIVE", label: "Active" },
+            { key: "PAUSED", label: "Paused" },
+          ].map((s) => (
             <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={cn(
-                "text-xs px-3 py-1.5 rounded-full transition-colors",
-                statusFilter === s
-                  ? "bg-brand-blue text-white"
-                  : "bg-surface text-muted hover:bg-card-border"
-              )}
+              key={s.key}
+              onClick={() => { setStatusFilter(s.key); setPage(1); }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                statusFilter === s.key
+                  ? "bg-gray-700 text-gray-100"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
             >
-              {s === "all" ? "All" : s === "ACTIVE" ? "Active" : "Paused / Draft"}
+              {s.label}
             </button>
           ))}
         </div>
-        <div className="w-px h-6 bg-card-border" />
-        <div className="flex gap-2 items-center">
-          <span className="text-xs text-muted font-medium">Platform:</span>
-          {[
-            { key: "all", label: "All Platforms" },
-            { key: "META", label: "Facebook / Meta" },
-            { key: "GOOGLE", label: "Google Ads" },
-          ].map(p => (
+
+        {/* Search */}
+        <div className="flex-1 min-w-[200px] max-w-sm relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search campaigns..."
+            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg pl-9 pr-3 py-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+          />
+        </div>
+
+        {/* Sort buttons */}
+        <div className="flex gap-1.5 ml-auto">
+          {([
+            { label: "Spend", col: "spend" as SortKey },
+            { label: "ROAS", col: "roas" as SortKey },
+            { label: "Conv", col: "conversions" as SortKey },
+            { label: "CPA", col: "cpa" as SortKey },
+          ]).map(({ label, col }) => (
             <button
-              key={p.key}
-              onClick={() => setPlatformFilter(p.key)}
-              className={cn(
-                "text-xs px-3 py-1.5 rounded-full transition-colors",
-                platformFilter === p.key
-                  ? "bg-brand-blue text-white"
-                  : "bg-surface text-muted hover:bg-card-border"
-              )}
+              key={col}
+              onClick={() => handleSort(col)}
+              className={`text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors border ${
+                sortBy === col
+                  ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 border-gray-700/50"
+              }`}
             >
-              {p.label}
+              {label}
+              {sortBy === col ? (
+                sortDir === "desc" ? <ArrowDown size={10} /> : <ArrowUp size={10} />
+              ) : (
+                <ArrowUpDown size={10} />
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Campaign List */}
-      {data.campaigns.length === 0 ? (
-        <div className="glass-card p-12 text-center">
-          <Target size={32} className="text-muted mx-auto mb-4" />
-          <p className="text-sm font-medium mb-1">No campaigns found</p>
-          <p className="text-xs text-muted">Push signals to draft from the Command Center to create campaigns.</p>
+      {/* Count line */}
+      {stats && (
+        <p className="text-[11px] text-gray-500 mb-4">
+          Showing {campaigns.length > 0 ? ((page - 1) * 50) + 1 : 0}--{Math.min(page * 50, stats.total)} of {stats.total}
+        </p>
+      )}
+
+      {/* Campaign list */}
+      {loading && !data ? (
+        <div className="space-y-4">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      ) : error && !data ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <AlertTriangle size={40} className="text-red-400 mb-4" />
+          <h2 className="text-lg font-semibold text-gray-100 mb-2">Failed to load campaigns</h2>
+          <p className="text-sm text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={fetchData}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium text-white transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      ) : campaigns.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <Search size={40} className="text-gray-600 mb-4" />
+          <h2 className="text-lg font-semibold text-gray-100 mb-2">No campaigns found</h2>
+          <p className="text-sm text-gray-400">Try adjusting your filters or search.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {data.campaigns.map((campaign) => (
-            <div key={campaign.id} className={cn(
-              "glass-card p-5",
-              campaign.status === "ACTIVE" && "ring-1 ring-green-200",
-            )}>
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-sm">{campaign.name}</h3>
-                    <StatusBadge status={campaign.status} />
-                    <ObjectiveBadge objective={campaign.objective} />
-                    <span className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">{campaign.platform}</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-muted mt-1">
-                    <span className="flex items-center gap-1"><Calendar size={10} /> Created {timeAgo(campaign.createdAt)}</span>
-                    <span className="flex items-center gap-1"><DollarSign size={10} /> {formatCurrency(campaign.dailyBudget)}/day</span>
-                    <span className="flex items-center gap-1"><Users size={10} /> {campaign.adSets} ad set{campaign.adSets !== 1 ? "s" : ""}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <button onClick={() => toggleStatus(campaign)} disabled={updating === campaign.id}
-                    className={cn("text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors",
-                      campaign.status === "PAUSED" ? "bg-green-50 text-green-700 hover:bg-green-100" : "bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
-                    )}>
-                    {updating === campaign.id ? <Loader2 size={12} className="animate-spin" /> :
-                      campaign.status === "PAUSED" ? <><Play size={12} /> Activate</> : <><Pause size={12} /> Pause</>}
-                  </button>
-                  <button onClick={() => editingId === campaign.id ? cancelEdit() : startEdit(campaign)}
-                    className={cn("text-xs flex items-center gap-1", editingId === campaign.id ? "btn-approve" : "btn-secondary")}>
-                    {editingId === campaign.id ? <><X size={12} /> Close</> : <><Pencil size={12} /> Edit</>}
-                  </button>
-                  <button onClick={() => archiveCampaign(campaign.id)} className="p-1.5 rounded-md hover:bg-red-50 text-muted hover:text-red-500 transition-colors" title="Archive">
-                    <Archive size={14} />
-                  </button>
-                  <a href={`https://business.facebook.com/adsmanager/manage/campaigns?act=1681306899957928&selected_campaign_ids=${campaign.id}`}
-                    target="_blank" className="btn-secondary text-xs flex items-center gap-1">
-                    <ExternalLink size={12} /> Ads Manager
-                  </a>
-                </div>
+          {campaigns.map((c) => {
+            const ed = editData[c.id];
+            const campaignAdSets = adSets[c.id] || [];
+            const campaignAds = ads[c.id] || [];
+            return (
+            <div
+              key={c.id}
+              className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-5 hover:border-gray-600/60 transition-colors"
+            >
+              {/* Row 1: Badges + campaign name */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wide ${
+                    c.platform === "META"
+                      ? "bg-blue-500/20 text-blue-400"
+                      : "bg-emerald-500/20 text-emerald-400"
+                  }`}
+                >
+                  {c.platform}
+                </span>
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
+                    c.status === "ACTIVE"
+                      ? "bg-green-500/20 text-green-400"
+                      : "bg-amber-500/20 text-amber-400"
+                  }`}
+                >
+                  {c.status === "ACTIVE" ? <Play size={8} /> : <Pause size={8} />}
+                  {c.status}
+                </span>
+                {c.campaignType && (
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-gray-700/60 text-gray-300 font-medium">
+                    {c.campaignType.replace(/_/g, " ")}
+                  </span>
+                )}
+                <span className="text-sm font-semibold text-gray-100 ml-1 break-all leading-snug">
+                  {c.name || "--"}
+                </span>
               </div>
 
-              {/* Full Edit Panel */}
-              {editingId === campaign.id && (
-                <div className="border-t border-card-border mt-3 pt-4">
-                  {editLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 size={24} className="animate-spin text-brand-blue" />
-                      <span className="text-sm text-muted ml-2">Loading campaign details from Facebook...</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Campaign Settings */}
-                      <div>
-                        <h4 className="text-xs font-semibold text-muted uppercase mb-3">Campaign Settings</h4>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <label className="text-[10px] font-medium text-muted block mb-1">Campaign Name</label>
-                            <input type="text" value={campaignEdit.name || ""} onChange={(e) => setCampaignEdit((p: any) => ({ ...p, name: e.target.value }))}
-                              className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
+              {/* Row 2: Metrics */}
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {[
+                  { label: "Spend", value: safe(c.metrics?.spend) > 0 ? fmtINR(safe(c.metrics.spend)) : "--" },
+                  {
+                    label: "ROAS",
+                    value: safe(c.metrics?.roas) > 0 ? safe(c.metrics.roas).toFixed(1) + "x" : "--",
+                    accent:
+                      safe(c.metrics?.roas) >= 3
+                        ? "text-green-400"
+                        : safe(c.metrics?.roas) >= 1
+                        ? "text-amber-400"
+                        : safe(c.metrics?.roas) > 0
+                        ? "text-red-400"
+                        : "text-gray-500",
+                  },
+                  { label: "Conversions", value: safe(c.metrics?.conversions) > 0 ? fmtNum(safe(c.metrics.conversions)) : "--" },
+                  { label: "CPA", value: safe(c.metrics?.cpa) > 0 ? fmtINR(safe(c.metrics.cpa)) : "--" },
+                  { label: "CTR", value: safe(c.metrics?.ctr) > 0 ? safe(c.metrics.ctr).toFixed(2) + "%" : "--" },
+                  { label: "Impressions", value: safe(c.metrics?.impressions) > 0 ? fmtNum(safe(c.metrics.impressions)) : "--" },
+                ].map((m) => (
+                  <div key={m.label}>
+                    <p className="text-xs text-gray-400">{m.label}</p>
+                    <p className={`font-mono text-sm text-gray-200 ${m.accent || ""}`}>{m.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Row 3: Action buttons */}
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-700/30">
+                <button
+                  onClick={() => toggleEdit(c)}
+                  className={`text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors ${
+                    editingId === c.id
+                      ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                      : "bg-gray-700/50 text-gray-300 hover:bg-gray-600/50"
+                  }`}
+                >
+                  <Pencil size={11} />
+                  Edit
+                </button>
+                <button
+                  onClick={() => handleAnalyze(c)}
+                  className={`text-xs px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors ${
+                    analyzingId === c.id
+                      ? "bg-purple-500/30 text-purple-300 border border-purple-500/30"
+                      : "bg-purple-500/20 text-purple-400 hover:bg-purple-500/30"
+                  }`}
+                >
+                  <Brain size={11} />
+                  AI Analyze
+                </button>
+                <a
+                  href={`https://www.facebook.com/adsmanager/manage/campaigns?act=${ACCOUNT_ID}&campaign_ids=${c.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs px-3 py-1.5 rounded bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 flex items-center gap-1.5 ml-auto transition-colors"
+                >
+                  Open in Meta
+                  <ExternalLink size={10} />
+                </a>
+              </div>
+
+              {/* ═══ EDIT PANEL — 3-Tab Editor ═══ */}
+              {editingId === c.id && ed && (
+                <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4 mt-3">
+                  {/* Tab Bar */}
+                  <div className="flex gap-1 mb-4">
+                    {([
+                      { key: "campaign" as const, label: "Campaign" },
+                      { key: "adsets" as const, label: `Ad Sets${campaignAdSets.length > 0 ? ` (${campaignAdSets.length})` : ""}` },
+                      { key: "ads" as const, label: `Ads${campaignAds.length > 0 ? ` (${campaignAds.length})` : ""}` },
+                    ]).map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => handleTabClick(tab.key, c.id)}
+                        className={`px-4 py-2 rounded-md text-xs font-medium transition-colors ${
+                          editTab === tab.key
+                            ? "bg-gray-700 text-gray-100"
+                            : "text-gray-400 hover:text-gray-300"
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ═══ Campaign Tab ═══ */}
+                  {editTab === "campaign" && (
+                    <>
+                      {/* Campaign Name — full width */}
+                      <div className="mb-4">
+                        <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Campaign Name</label>
+                        <input
+                          type="text"
+                          value={ed.name}
+                          onChange={(e) => updateEditField(c.id, "name", e.target.value)}
+                          className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                      </div>
+
+                      {/* 2-column grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Status */}
+                        <div>
+                          <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Status</label>
+                          <div className="flex items-center gap-1 bg-gray-900/50 rounded-lg p-0.5">
+                            <button
+                              onClick={() => updateEditField(c.id, "status", "ACTIVE")}
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                                ed.status === "ACTIVE"
+                                  ? "bg-green-500/20 text-green-400"
+                                  : "text-gray-500 hover:text-gray-300"
+                              }`}
+                            >
+                              <Play size={9} /> Active
+                            </button>
+                            <button
+                              onClick={() => updateEditField(c.id, "status", "PAUSED")}
+                              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                                ed.status === "PAUSED"
+                                  ? "bg-amber-500/20 text-amber-400"
+                                  : "text-gray-500 hover:text-gray-300"
+                              }`}
+                            >
+                              <Pause size={9} /> Paused
+                            </button>
                           </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-muted block mb-1">Status</label>
-                            <select value={campaignEdit.status || ""} onChange={(e) => setCampaignEdit((p: any) => ({ ...p, status: e.target.value }))}
-                              className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                              <option value="ACTIVE">Active</option>
-                              <option value="PAUSED">Paused</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-muted block mb-1">Bid Strategy</label>
-                            <select value={campaignEdit.bid_strategy || ""} onChange={(e) => setCampaignEdit((p: any) => ({ ...p, bid_strategy: e.target.value }))}
-                              className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                              <option value="LOWEST_COST_WITHOUT_CAP">Lowest Cost</option>
-                              <option value="LOWEST_COST_WITH_BID_CAP">Bid Cap</option>
-                              <option value="COST_CAP">Cost Cap</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-muted block mb-1">Daily Budget (INR)</label>
-                            <input type="number" value={campaignEdit.daily_budget || ""} onChange={(e) => setCampaignEdit((p: any) => ({ ...p, daily_budget: parseInt(e.target.value) || 0 }))}
-                              className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-muted block mb-1">Spend Cap (INR)</label>
-                            <input type="number" value={campaignEdit.spend_cap || ""} onChange={(e) => setCampaignEdit((p: any) => ({ ...p, spend_cap: parseInt(e.target.value) || 0 }))}
-                              placeholder="No cap" className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-medium text-muted block mb-1">Special Ad Category</label>
-                            <select value={campaignEdit.special_ad_categories?.[0] || "NONE"} onChange={(e) => setCampaignEdit((p: any) => ({ ...p, special_ad_categories: e.target.value === "NONE" ? [] : [e.target.value] }))}
-                              className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                              <option value="NONE">None</option>
-                              <option value="HOUSING">Housing</option>
-                              <option value="EMPLOYMENT">Employment</option>
-                              <option value="CREDIT">Credit</option>
-                              <option value="ISSUES_ELECTIONS_POLITICS">Issues / Elections / Politics</option>
-                            </select>
-                          </div>
+                        </div>
+
+                        {/* Bid Strategy */}
+                        <div>
+                          <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Bid Strategy</label>
+                          <select
+                            value={ed.bidStrategy}
+                            onChange={(e) => updateEditField(c.id, "bidStrategy", e.target.value)}
+                            className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                          >
+                            {BID_STRATEGIES.map((bs) => (
+                              <option key={bs.value} value={bs.value}>{bs.label}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Daily Budget */}
+                        <div>
+                          <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Daily Budget (INR)</label>
+                          <input
+                            type="number"
+                            value={ed.dailyBudget}
+                            onChange={(e) => updateEditField(c.id, "dailyBudget", e.target.value)}
+                            placeholder="e.g. 50000"
+                            className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Spend Cap */}
+                        <div>
+                          <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Spend Cap (INR)</label>
+                          <input
+                            type="number"
+                            value={ed.spendCap}
+                            onChange={(e) => updateEditField(c.id, "spendCap", e.target.value)}
+                            placeholder="0 = no cap"
+                            className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* Start Date */}
+                        <div>
+                          <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Start Date</label>
+                          <input
+                            type="date"
+                            value={ed.startTime}
+                            onChange={(e) => updateEditField(c.id, "startTime", e.target.value)}
+                            className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
+                        </div>
+
+                        {/* End Date */}
+                        <div>
+                          <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">End Date</label>
+                          <input
+                            type="date"
+                            value={ed.stopTime}
+                            onChange={(e) => updateEditField(c.id, "stopTime", e.target.value)}
+                            placeholder="Leave empty for no end date"
+                            className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
                         </div>
                       </div>
 
-                      {/* Ad Set Settings */}
-                      {adSetEdits.length === 0 && (
-                        <div className="border border-dashed border-card-border rounded-xl p-6 text-center">
-                          <p className="text-sm text-muted mb-2">No ad sets found for this campaign</p>
-                          <p className="text-xs text-muted mb-4">Ad sets contain targeting, budget, and schedule settings. Create one to complete the campaign setup.</p>
-                          <button
-                            onClick={async () => {
-                              setUpdating(campaign.id);
-                              try {
-                                const tomorrow = new Date();
-                                tomorrow.setDate(tomorrow.getDate() + 1);
-                                const adAccountId = "1681306899957928";
-                                const token = await fetch("/api/ads/push-draft").then(r => r.json()).then(d => d.meta?.adAccountId || adAccountId);
+                      {/* Actions row */}
+                      <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-700/20">
+                        <button
+                          onClick={() => handleSave(c.id)}
+                          disabled={saving}
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          {saving ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                          Save Campaign
+                        </button>
+                        <button
+                          onClick={() => { setEditingId(null); setEditTab("campaign"); setSaveMsg(null); }}
+                          className="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-1.5 rounded text-xs transition-colors flex items-center gap-1.5"
+                        >
+                          <X size={11} />
+                          Cancel
+                        </button>
 
-                                const formData = new URLSearchParams();
-                                formData.append("access_token", await fetch(`/api/campaigns/${campaign.id}`).then(r => r.json()).then(() => ""));
-                                // Use the API route to create ad set
-                                const res = await fetch(`/api/campaigns/${campaign.id}/adset`, {
-                                  method: "POST",
-                                  headers: { "Content-Type": "application/json" },
-                                  body: JSON.stringify({ campaignId: campaign.id }),
-                                });
-                                const data = await res.json();
-                                if (data.error) {
-                                  alert("Error: " + data.error);
-                                } else {
-                                  // Reload edit panel
-                                  startEdit(campaign);
-                                }
-                              } catch (err: any) {
-                                alert("Error: " + err.message);
-                              } finally {
-                                setUpdating(null);
-                              }
-                            }}
-                            disabled={updating === campaign.id}
-                            className="btn-primary text-xs"
-                          >
-                            {updating === campaign.id ? <Loader2 size={14} className="animate-spin" /> : <Target size={14} />} Create Ad Set with Default Targeting
-                          </button>
+                        {saveMsg && saveMsg.id === c.id && (
+                          <span className={`text-xs ml-2 ${saveMsg.ok ? "text-green-400" : "text-red-400"}`}>
+                            {saveMsg.text}
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {/* ═══ Ad Sets Tab ═══ */}
+                  {editTab === "adsets" && (
+                    <div>
+                      {adSetsLoading === c.id ? (
+                        <div className="flex items-center gap-2 py-8 justify-center">
+                          <Loader2 size={16} className="animate-spin text-blue-400" />
+                          <span className="text-xs text-gray-400">Loading ad sets...</span>
+                        </div>
+                      ) : campaignAdSets.length === 0 ? (
+                        <p className="text-xs text-gray-500 text-center py-8">No ad sets found for this campaign.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {campaignAdSets.map((as) => {
+                            const ase = adSetEdits[as.id];
+                            if (!ase) return null;
+                            const showBidAmount = ase.bidStrategy === "COST_CAP" || ase.bidStrategy === "LOWEST_COST_WITH_BID_CAP";
+                            return (
+                              <div key={as.id} className="bg-gray-800/20 border border-gray-700/30 rounded-lg p-4">
+                                {/* Ad Set Header */}
+                                <div className="flex items-center gap-2 mb-3">
+                                  <span className="text-xs font-semibold text-gray-200 break-all">{as.name}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                    as.status === "ACTIVE" ? "bg-green-500/20 text-green-400" : "bg-amber-500/20 text-amber-400"
+                                  }`}>
+                                    {as.status}
+                                  </span>
+                                </div>
+
+                                {/* Status */}
+                                <div className="mb-3">
+                                  <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Status</label>
+                                  <div className="flex items-center gap-1 bg-gray-900/50 rounded-lg p-0.5 w-fit">
+                                    <button
+                                      onClick={() => updateAdSetField(as.id, "status", "ACTIVE")}
+                                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                                        ase.status === "ACTIVE" ? "bg-green-500/20 text-green-400" : "text-gray-500 hover:text-gray-300"
+                                      }`}
+                                    >
+                                      <Play size={9} /> Active
+                                    </button>
+                                    <button
+                                      onClick={() => updateAdSetField(as.id, "status", "PAUSED")}
+                                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                                        ase.status === "PAUSED" ? "bg-amber-500/20 text-amber-400" : "text-gray-500 hover:text-gray-300"
+                                      }`}
+                                    >
+                                      <Pause size={9} /> Paused
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Budget row */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Daily Budget (INR)</label>
+                                    <input
+                                      type="number"
+                                      value={ase.dailyBudget}
+                                      onChange={(e) => updateAdSetField(as.id, "dailyBudget", e.target.value)}
+                                      placeholder="--"
+                                      className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Lifetime Budget (INR)</label>
+                                    <input
+                                      type="number"
+                                      value={ase.lifetimeBudget}
+                                      onChange={(e) => updateAdSetField(as.id, "lifetimeBudget", e.target.value)}
+                                      placeholder="--"
+                                      className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Optimization + Bid */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Optimization Goal</label>
+                                    <select
+                                      value={ase.optimizationGoal}
+                                      onChange={(e) => updateAdSetField(as.id, "optimizationGoal", e.target.value)}
+                                      className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    >
+                                      {OPTIMIZATION_GOALS.map((og) => (
+                                        <option key={og.value} value={og.value}>{og.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Bid Strategy</label>
+                                    <select
+                                      value={ase.bidStrategy}
+                                      onChange={(e) => updateAdSetField(as.id, "bidStrategy", e.target.value)}
+                                      className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    >
+                                      {BID_STRATEGIES.map((bs) => (
+                                        <option key={bs.value} value={bs.value}>{bs.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {/* Bid Amount — conditional */}
+                                {showBidAmount && (
+                                  <div className="mb-3">
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Bid Amount (INR)</label>
+                                    <input
+                                      type="number"
+                                      value={ase.bidAmount}
+                                      onChange={(e) => updateAdSetField(as.id, "bidAmount", e.target.value)}
+                                      placeholder="e.g. 50"
+                                      className="w-48 bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* ── TARGETING ── */}
+                                <div className="border-t border-gray-700/30 pt-3 mt-3">
+                                  <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-2">Targeting</p>
+
+                                  {/* Age + Gender */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 mb-1 block">Age Min</label>
+                                      <input
+                                        type="number"
+                                        value={ase.ageMin}
+                                        onChange={(e) => updateAdSetField(as.id, "ageMin", e.target.value)}
+                                        min="13" max="65"
+                                        className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 mb-1 block">Age Max</label>
+                                      <input
+                                        type="number"
+                                        value={ase.ageMax}
+                                        onChange={(e) => updateAdSetField(as.id, "ageMax", e.target.value)}
+                                        min="13" max="65"
+                                        className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] text-gray-500 mb-1 block">Gender</label>
+                                      <select
+                                        value={ase.gender}
+                                        onChange={(e) => updateAdSetField(as.id, "gender", e.target.value)}
+                                        className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                      >
+                                        <option value="all">All</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                      </select>
+                                    </div>
+                                  </div>
+
+                                  {/* Location (read-only) */}
+                                  <div className="mb-3">
+                                    <label className="text-[10px] text-gray-500 mb-1 block">Location</label>
+                                    <div className="bg-gray-900/30 border border-gray-700/30 rounded px-3 py-1.5 text-sm text-gray-400">
+                                      {ase.geoLocations?.countries?.join(", ") || ase.geoLocations?.cities?.map((c: any) => c.name).join(", ") || "Not set"}
+                                      <span className="text-[10px] text-gray-600 ml-2">(read-only)</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Platforms */}
+                                  <div className="mb-3">
+                                    <label className="text-[10px] text-gray-500 mb-1 block">Platforms</label>
+                                    <div className="flex flex-wrap gap-3">
+                                      {PLATFORM_OPTIONS.map((p) => (
+                                        <label key={p.value} className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={ase.platforms.includes(p.value)}
+                                            onChange={() => toggleArrayItem(as.id, "platforms", p.value)}
+                                            className="accent-blue-500"
+                                          />
+                                          {p.label}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* IG Placements */}
+                                  {ase.platforms.includes("instagram") && (
+                                    <div className="mb-3">
+                                      <label className="text-[10px] text-gray-500 mb-1 block">Instagram Placements</label>
+                                      <div className="flex flex-wrap gap-3">
+                                        {IG_PLACEMENTS.map((p) => (
+                                          <label key={p.value} className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                                            <input
+                                              type="checkbox"
+                                              checked={ase.igPlacements.includes(p.value)}
+                                              onChange={() => toggleArrayItem(as.id, "igPlacements", p.value)}
+                                              className="accent-blue-500"
+                                            />
+                                            {p.label}
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* FB Placements */}
+                                  {ase.platforms.includes("facebook") && (
+                                    <div className="mb-3">
+                                      <label className="text-[10px] text-gray-500 mb-1 block">Facebook Placements</label>
+                                      <div className="flex flex-wrap gap-3">
+                                        {FB_PLACEMENTS.map((p) => (
+                                          <label key={p.value} className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                                            <input
+                                              type="checkbox"
+                                              checked={ase.fbPlacements.includes(p.value)}
+                                              onChange={() => toggleArrayItem(as.id, "fbPlacements", p.value)}
+                                              className="accent-blue-500"
+                                            />
+                                            {p.label}
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Devices */}
+                                  <div className="mb-3">
+                                    <label className="text-[10px] text-gray-500 mb-1 block">Devices</label>
+                                    <div className="flex flex-wrap gap-3">
+                                      {DEVICE_OPTIONS.map((d) => (
+                                        <label key={d.value} className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={ase.devices.includes(d.value)}
+                                            onChange={() => toggleArrayItem(as.id, "devices", d.value)}
+                                            className="accent-blue-500"
+                                          />
+                                          {d.label}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Custom Audiences (read-only) */}
+                                  {(ase.customAudiences.length > 0 || ase.excludedCustomAudiences.length > 0) && (
+                                    <div className="mb-3">
+                                      {ase.customAudiences.length > 0 && (
+                                        <div className="mb-1">
+                                          <label className="text-[10px] text-gray-500 mb-1 block">Custom Audiences</label>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {ase.customAudiences.map((ca: any) => (
+                                              <span key={ca.id} className="text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.5 rounded">
+                                                {ca.name || ca.id}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {ase.excludedCustomAudiences.length > 0 && (
+                                        <div>
+                                          <label className="text-[10px] text-gray-500 mb-1 block">Excluded Audiences</label>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {ase.excludedCustomAudiences.map((ca: any) => (
+                                              <span key={ca.id} className="text-[10px] bg-red-500/10 text-red-300 border border-red-500/20 px-2 py-0.5 rounded">
+                                                {ca.name || ca.id}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Schedule */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Start Date</label>
+                                    <input
+                                      type="date"
+                                      value={ase.startTime}
+                                      onChange={(e) => updateAdSetField(as.id, "startTime", e.target.value)}
+                                      className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">End Date</label>
+                                    <input
+                                      type="date"
+                                      value={ase.endTime}
+                                      onChange={(e) => updateAdSetField(as.id, "endTime", e.target.value)}
+                                      className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Save Ad Set */}
+                                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-700/20">
+                                  <button
+                                    onClick={() => saveAdSet(as.id)}
+                                    disabled={adSetSaving === as.id}
+                                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                                  >
+                                    {adSetSaving === as.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                                    Save Ad Set
+                                  </button>
+                                  {adSetSaveMsg[as.id] && (
+                                    <span className={`text-xs ${adSetSaveMsg[as.id].ok ? "text-green-400" : "text-red-400"}`}>
+                                      {adSetSaveMsg[as.id].text}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
-                      {adSetEdits.map((adSet, idx) => (
-                        <div key={adSet.id}>
-                          <h4 className="text-xs font-semibold text-muted uppercase mb-3">Ad Set: {adSet.name}</h4>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Ad Set Name</label>
-                              <input type="text" value={adSet.name} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], name: e.target.value }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Status</label>
-                              <select value={adSet.status} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], status: e.target.value }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                                <option value="ACTIVE">Active</option>
-                                <option value="PAUSED">Paused</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Daily Budget (INR)</label>
-                              <input type="number" value={adSet.daily_budget} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], daily_budget: parseInt(e.target.value) || 0 }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Optimization Goal</label>
-                              <select value={adSet.optimization_goal} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], optimization_goal: e.target.value }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                                <option value="OFFSITE_CONVERSIONS">Conversions</option>
-                                <option value="LINK_CLICKS">Link Clicks</option>
-                                <option value="IMPRESSIONS">Impressions</option>
-                                <option value="REACH">Reach</option>
-                                <option value="LANDING_PAGE_VIEWS">Landing Page Views</option>
-                                <option value="VALUE">Value</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Billing Event</label>
-                              <select value={adSet.billing_event} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], billing_event: e.target.value }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                                <option value="IMPRESSIONS">Impressions</option>
-                                <option value="LINK_CLICKS">Link Clicks</option>
-                                <option value="THRUPLAY">ThruPlay</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Bid Amount (INR)</label>
-                              <input type="number" value={adSet.bid_amount || ""} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], bid_amount: parseInt(e.target.value) || 0 }; setAdSetEdits(u); }}
-                                placeholder="Auto" className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Start Date</label>
-                              <input type="date" value={adSet.start_time || ""} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], start_time: e.target.value }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">End Date</label>
-                              <input type="date" value={adSet.end_time || ""} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], end_time: e.target.value }; setAdSetEdits(u); }}
-                                placeholder="No end date" className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                          </div>
+                    </div>
+                  )}
 
-                          {/* Targeting */}
-                          <h4 className="text-xs font-semibold text-muted uppercase mt-4 mb-3">Targeting</h4>
-                          <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Countries (comma separated)</label>
-                              <input type="text" value={adSet._countries || ""} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], _countries: e.target.value }; setAdSetEdits(u); }}
-                                placeholder="IN, US, GB" className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Age Min</label>
-                              <input type="number" min="13" max="65" value={adSet._age_min || 18} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], _age_min: parseInt(e.target.value) }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Age Max</label>
-                              <input type="number" min="13" max="65" value={adSet._age_max || 65} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], _age_max: parseInt(e.target.value) }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-medium text-muted block mb-1">Gender</label>
-                              <select value={adSet._genders || "all"} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], _genders: e.target.value }; setAdSetEdits(u); }}
-                                className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue">
-                                <option value="all">All</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                              </select>
-                            </div>
-                            <div className="col-span-2">
-                              <label className="text-[10px] font-medium text-muted block mb-1">Platforms (comma separated)</label>
-                              <input type="text" value={adSet._platforms || ""} onChange={(e) => { const u = [...adSetEdits]; u[idx] = { ...u[idx], _platforms: e.target.value }; setAdSetEdits(u); }}
-                                placeholder="facebook, instagram, audience_network" className="w-full border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue" />
-                            </div>
-                          </div>
+                  {/* ═══ Ads Tab ═══ */}
+                  {editTab === "ads" && (
+                    <div>
+                      {adsLoading === c.id ? (
+                        <div className="flex items-center gap-2 py-8 justify-center">
+                          <Loader2 size={16} className="animate-spin text-blue-400" />
+                          <span className="text-xs text-gray-400">Loading ads...</span>
                         </div>
-                      ))}
+                      ) : campaignAds.length === 0 ? (
+                        <p className="text-xs text-gray-500 text-center py-8">No ads found for this campaign.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {campaignAds.map((ad) => {
+                            const ae = adEdits[ad.id];
+                            if (!ae) return null;
+                            return (
+                              <div key={ad.id} className="bg-gray-800/20 border border-gray-700/30 rounded-lg p-4">
+                                {/* Ad Header */}
+                                <div className="flex items-center gap-2 mb-3">
+                                  <span className="text-xs font-semibold text-gray-200 break-all">{ad.name}</span>
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                    ad.status === "ACTIVE" ? "bg-green-500/20 text-green-400" : "bg-amber-500/20 text-amber-400"
+                                  }`}>
+                                    {ad.status}
+                                  </span>
+                                </div>
 
-                      {/* Save / Cancel */}
-                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-card-border">
-                        <button onClick={cancelEdit} className="btn-secondary text-xs flex items-center gap-1">
-                          <X size={12} /> Cancel
-                        </button>
-                        <button onClick={() => saveEdit(campaign.id)} disabled={updating === campaign.id}
-                          className="btn-approve flex items-center gap-1">
-                          {updating === campaign.id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                          Save All Changes to Facebook
-                        </button>
-                      </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                                  {/* Status */}
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Status</label>
+                                    <div className="flex items-center gap-1 bg-gray-900/50 rounded-lg p-0.5 w-fit">
+                                      <button
+                                        onClick={() => setAdEdits((prev) => ({ ...prev, [ad.id]: { ...prev[ad.id], status: "ACTIVE" } }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                                          ae.status === "ACTIVE" ? "bg-green-500/20 text-green-400" : "text-gray-500 hover:text-gray-300"
+                                        }`}
+                                      >
+                                        <Play size={9} /> Active
+                                      </button>
+                                      <button
+                                        onClick={() => setAdEdits((prev) => ({ ...prev, [ad.id]: { ...prev[ad.id], status: "PAUSED" } }))}
+                                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors flex items-center gap-1 ${
+                                          ae.status === "PAUSED" ? "bg-amber-500/20 text-amber-400" : "text-gray-500 hover:text-gray-300"
+                                        }`}
+                                      >
+                                        <Pause size={9} /> Paused
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Name */}
+                                  <div>
+                                    <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Ad Name</label>
+                                    <input
+                                      type="text"
+                                      value={ae.name}
+                                      onChange={(e) => setAdEdits((prev) => ({ ...prev, [ad.id]: { ...prev[ad.id], name: e.target.value } }))}
+                                      className="w-full bg-gray-900/50 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Creative info */}
+                                {ad.creative && (
+                                  <div className="bg-gray-900/30 border border-gray-700/20 rounded p-3 mb-3">
+                                    <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-2">Creative</p>
+                                    <div className="flex gap-3">
+                                      {(ad.creative.imageUrl || ad.creative.thumbnailUrl) && (
+                                        <div className="w-16 h-16 rounded overflow-hidden bg-gray-800 flex-shrink-0">
+                                          <img
+                                            src={ad.creative.imageUrl || ad.creative.thumbnailUrl}
+                                            alt="Creative"
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                                          />
+                                        </div>
+                                      )}
+                                      <div className="space-y-1 min-w-0">
+                                        {ad.creative.title && (
+                                          <p className="text-xs text-gray-300 truncate"><span className="text-gray-500">Title:</span> {ad.creative.title}</p>
+                                        )}
+                                        {ad.creative.body && (
+                                          <p className="text-xs text-gray-300 truncate"><span className="text-gray-500">Body:</span> {ad.creative.body}</p>
+                                        )}
+                                        {ad.creative.callToAction && (
+                                          <p className="text-xs text-gray-300">
+                                            <span className="text-gray-500">CTA:</span>{" "}
+                                            <span className="bg-blue-500/10 text-blue-300 px-1.5 py-0.5 rounded text-[10px]">
+                                              {ad.creative.callToAction.replace(/_/g, " ")}
+                                            </span>
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Save Ad */}
+                                <div className="flex items-center gap-3 pt-3 border-t border-gray-700/20">
+                                  <button
+                                    onClick={() => saveAd(ad.id)}
+                                    disabled={adSaving === ad.id}
+                                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                                  >
+                                    {adSaving === ad.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                                    Save Ad
+                                  </button>
+                                  {adSaveMsg[ad.id] && (
+                                    <span className={`text-xs ${adSaveMsg[ad.id].ok ? "text-green-400" : "text-red-400"}`}>
+                                      {adSaveMsg[ad.id].text}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Targeting */}
-              <div className="flex items-center gap-1 mb-3">
-                <MapPin size={10} className="text-muted" />
-                <span className="text-[10px] text-muted">{campaign.targeting}</span>
-              </div>
-
-              {/* Metrics */}
-              <div className="grid grid-cols-7 gap-3">
-                <div className="text-center p-2 bg-surface rounded-lg">
-                  <p className="text-[10px] text-muted flex items-center justify-center gap-1"><DollarSign size={9} /> Spend</p>
-                  <p className="text-sm font-bold mt-0.5">{formatCurrency(campaign.metrics.spend)}</p>
+              {/* AI Analysis Panel */}
+              {analyzingId === c.id && (
+                <div className="mt-3 p-4 bg-gray-800/30 border border-gray-700/40 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Brain size={14} className="text-purple-400" />
+                    <span className="text-xs font-semibold text-purple-300 uppercase tracking-wider">Deep AI Analysis</span>
+                    <button
+                      onClick={() => setAnalyzingId(null)}
+                      className="ml-auto text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  {analyzeLoading === c.id ? (
+                    <div className="flex items-center gap-2 py-6">
+                      <Loader2 size={16} className="animate-spin text-purple-400" />
+                      <div>
+                        <span className="text-xs text-gray-300 font-medium">Deep analyzing</span>
+                        <span className="text-xs text-purple-400 animate-pulse">...</span>
+                        <p className="text-[10px] text-gray-500 mt-0.5">Fetching ad sets, ads, breakdowns, and 7-day trends from Meta API</p>
+                      </div>
+                    </div>
+                  ) : analyzeResults[c.id] ? (
+                    <div>
+                      <div className="space-y-2.5">
+                        {(analyzeResults[c.id].suggestions || []).map((s: any, i: number) => (
+                          <div
+                            key={i}
+                            className={`pl-3 py-2 pr-3 rounded-r-lg text-sm ${
+                              s.type === "warning"
+                                ? "border-l-2 border-red-500/70 bg-red-500/5"
+                                : s.type === "success"
+                                ? "border-l-2 border-green-500/70 bg-green-500/5"
+                                : s.type === "opportunity"
+                                ? "border-l-2 border-purple-500/70 bg-purple-500/5"
+                                : "border-l-2 border-blue-500/70 bg-blue-500/5"
+                            }`}
+                          >
+                            <p className="font-semibold text-gray-100 text-sm">{s.icon} {s.title}</p>
+                            <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{s.detail}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {analyzeResults[c.id].meta && (
+                        <div className="mt-3 pt-3 border-t border-gray-700/30">
+                          <p className="text-[10px] text-gray-500">
+                            Analyzed: {analyzeResults[c.id].meta.adSetsCount} ad sets, {analyzeResults[c.id].meta.adsCount} ads, {analyzeResults[c.id].meta.ageSegments} age segments, {analyzeResults[c.id].meta.placementsCount} placements, {analyzeResults[c.id].meta.devicesCount} devices, {analyzeResults[c.id].meta.dailyDays}-day trend
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="text-center p-2 bg-surface rounded-lg">
-                  <p className="text-[10px] text-muted flex items-center justify-center gap-1"><Eye size={9} /> Impressions</p>
-                  <p className="text-sm font-bold mt-0.5">{formatNumber(campaign.metrics.impressions)}</p>
-                </div>
-                <div className="text-center p-2 bg-surface rounded-lg">
-                  <p className="text-[10px] text-muted flex items-center justify-center gap-1"><MousePointerClick size={9} /> Clicks</p>
-                  <p className="text-sm font-bold mt-0.5">{formatNumber(campaign.metrics.clicks)}</p>
-                </div>
-                <div className="text-center p-2 bg-surface rounded-lg">
-                  <p className="text-[10px] text-muted">CTR</p>
-                  <p className="text-sm font-bold mt-0.5">{campaign.metrics.ctr.toFixed(2)}%</p>
-                </div>
-                <div className="text-center p-2 bg-surface rounded-lg">
-                  <p className="text-[10px] text-muted">CPC</p>
-                  <p className="text-sm font-bold mt-0.5">{formatCurrency(campaign.metrics.cpc)}</p>
-                </div>
-                <div className="text-center p-2 bg-surface rounded-lg">
-                  <p className="text-[10px] text-muted">Conversions</p>
-                  <p className="text-sm font-bold mt-0.5">{campaign.metrics.conversions}</p>
-                </div>
-                <div className="text-center p-2 bg-surface rounded-lg">
-                  <p className="text-[10px] text-muted flex items-center justify-center gap-1"><TrendingUp size={9} /> ROAS</p>
-                  <p className={cn("text-sm font-bold mt-0.5",
-                    campaign.metrics.roas >= 3 ? "text-green-600" :
-                    campaign.metrics.roas >= 1 ? "text-yellow-600" : "text-muted"
-                  )}>{campaign.metrics.roas.toFixed(1)}x</p>
-                </div>
-              </div>
+              )}
             </div>
-          ))}
+          );
+          })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {stats && stats.totalPages > 1 && (
+        <div className="flex items-center justify-between pt-6">
+          <p className="text-xs text-gray-500">
+            Page {page} of {stats.totalPages}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                page <= 1
+                  ? "text-gray-600 cursor-not-allowed"
+                  : "text-gray-400 hover:bg-gray-800/60"
+              }`}
+            >
+              <ChevronLeft size={14} /> Prev
+            </button>
+            {Array.from({ length: Math.min(7, stats.totalPages) }, (_, i) => {
+              let pn: number;
+              if (stats.totalPages <= 7) pn = i + 1;
+              else if (page <= 4) pn = i + 1;
+              else if (page >= stats.totalPages - 3) pn = stats.totalPages - 6 + i;
+              else pn = page - 3 + i;
+              return (
+                <button
+                  key={pn}
+                  onClick={() => setPage(pn)}
+                  className={`w-8 h-8 rounded-lg text-xs transition-colors ${
+                    page === pn
+                      ? "bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30"
+                      : "text-gray-400 hover:bg-gray-800/60"
+                  }`}
+                >
+                  {pn}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => setPage((p) => Math.min(stats.totalPages, p + 1))}
+              disabled={page >= stats.totalPages || loading}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                page >= stats.totalPages
+                  ? "text-gray-600 cursor-not-allowed"
+                  : "text-gray-400 hover:bg-gray-800/60"
+              }`}
+            >
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading overlay */}
+      {loading && data && (
+        <div className="fixed bottom-6 right-6 bg-gray-800/90 border border-gray-700/50 rounded-lg px-4 py-2 flex items-center gap-2 shadow-xl z-50">
+          <Loader2 size={14} className="animate-spin text-blue-400" />
+          <span className="text-xs text-gray-400">Updating...</span>
         </div>
       )}
     </div>

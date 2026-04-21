@@ -1,163 +1,300 @@
 import { NextResponse } from "next/server";
+import { redis } from "@/lib/redis";
+import { db } from "@/lib/db";
 
-/**
- * GET /api/campaigns
- * Fetches real campaigns from Meta Ads (and Google Ads when available).
- */
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const statusFilter = searchParams.get("status");
-  const platformFilter = searchParams.get("platform");
+const META_API = "https://graph.facebook.com/v25.0";
+const CACHE_KEY = "campaigns:live:meta";
+const CACHE_TTL = 300; // 5 minutes
 
-  const campaigns: any[] = [];
+// ── Helpers ─────────────────────────────────────────────────────
 
-  // ========== META ADS ==========
-  const metaToken = process.env.META_ADS_ACCESS_TOKEN;
-  const metaAccountId = process.env.META_ADS_ACCOUNT_ID;
+function deriveCampaignType(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes("pmax") || n.includes("performance max")) return "PMax";
+  if (n.includes("shopping")) return "Shopping";
+  if (n.includes("search")) return "Search";
+  if (n.includes("dpa") || n.includes("dynamic product")) return "DPA";
+  if (n.includes("retarget") || n.includes("remarketing") || n.includes("rtml")) return "Retargeting";
+  if (n.includes("prospecting") || n.includes("prosp")) return "Prospecting";
+  if (n.includes("brand") || n.includes("branding")) return "Brand";
+  if (n.includes("video") || n.includes("reel")) return "Video";
+  if (n.includes("display")) return "Display";
+  if (n.includes("catalog") || n.includes("catalogue")) return "Catalog";
+  if (n.includes("aso") || n.includes("advantage+") || n.includes("asc")) return "ASC";
+  if (n.includes("awareness")) return "Awareness";
+  if (n.includes("engagement")) return "Engagement";
+  if (n.includes("traffic")) return "Traffic";
+  if (n.includes("lead")) return "Leads";
+  return "";
+}
 
-  if (metaToken && metaAccountId) {
-    try {
-      const fields = [
-        "id",
-        "name",
-        "status",
-        "objective",
-        "created_time",
-        "updated_time",
-        "daily_budget",
-        "lifetime_budget",
-        "start_time",
-        "stop_time",
-        "bid_strategy",
-      ].join(",");
+async function fetchAllPages(url: string): Promise<any[]> {
+  const all: any[] = [];
+  let nextUrl: string | null = url;
+  while (nextUrl) {
+    const res: Response = await fetch(nextUrl);
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Meta API ${res.status}: ${err}`);
+    }
+    const json = await res.json();
+    if (json.data) all.push(...json.data);
+    nextUrl = json.paging?.next || null;
+  }
+  return all;
+}
 
-      const campaignRes = await fetch(
-        `https://graph.facebook.com/v25.0/act_${metaAccountId}/campaigns?fields=${fields}&limit=100&access_token=${metaToken}`
-      );
-      const campaignData = await campaignRes.json();
+interface MergedCampaign {
+  id: string;
+  name: string;
+  platform: string;
+  status: string;
+  objective: string;
+  campaignType: string;
+  dailyBudget: number;
+  metrics: {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    ctr: number;
+    cpc: number;
+    conversions: number;
+    conversionValue: number;
+    roas: number;
+    cpa: number;
+  };
+}
 
-      if (campaignData.data) {
-        // Fetch insights for all campaigns
-        const campaignIds = campaignData.data.map((c: any) => c.id);
-        const insightsMap: Record<string, any> = {};
+async function fetchLiveMetaCampaigns(statusFilter?: string): Promise<MergedCampaign[]> {
+  const token = process.env.AJIO_LUXE_META_ACCESS_TOKEN;
+  const accountId = process.env.AJIO_LUXE_META_ACCOUNT_ID || "202330961584003";
+  if (!token) throw new Error("AJIO_LUXE_META_ACCESS_TOKEN not set");
 
-        // Fetch insights in parallel (batch of up to 50)
-        await Promise.all(
-          campaignData.data.map(async (campaign: any) => {
-            try {
-              const insightRes = await fetch(
-                `https://graph.facebook.com/v25.0/${campaign.id}/insights?fields=spend,impressions,clicks,ctr,cpc,actions,action_values,conversions&date_preset=maximum&access_token=${metaToken}`
-              );
-              const insightData = await insightRes.json();
-              if (insightData.data?.[0]) {
-                insightsMap[campaign.id] = insightData.data[0];
-              }
-            } catch {}
-          })
-        );
+  // Build status filter for Meta API
+  const statuses = statusFilter && statusFilter !== "all"
+    ? [statusFilter.toUpperCase()]
+    : ["ACTIVE", "PAUSED"];
 
-        // Fetch ad sets for each campaign
-        const adSetsMap: Record<string, any[]> = {};
-        await Promise.all(
-          campaignData.data.map(async (campaign: any) => {
-            try {
-              const adSetRes = await fetch(
-                `https://graph.facebook.com/v25.0/${campaign.id}/adsets?fields=id,name,status,daily_budget,targeting,optimization_goal,billing_event,start_time&access_token=${metaToken}`
-              );
-              const adSetData = await adSetRes.json();
-              if (adSetData.data) {
-                adSetsMap[campaign.id] = adSetData.data;
-              }
-            } catch {}
-          })
-        );
+  const filterJSON = JSON.stringify([
+    { field: "effective_status", operator: "IN", value: statuses },
+  ]);
 
-        for (const c of campaignData.data) {
-          const insights = insightsMap[c.id];
-          const adSets = adSetsMap[c.id] || [];
-          const adSet = adSets[0]; // Primary ad set
+  // Step 1: Fetch campaigns
+  const campaignsUrl =
+    `${META_API}/act_${accountId}/campaigns` +
+    `?fields=id,name,status,objective,daily_budget,lifetime_budget,created_time,updated_time,start_time,stop_time` +
+    `&filtering=${encodeURIComponent(filterJSON)}` +
+    `&limit=100` +
+    `&access_token=${token}`;
 
-          // Extract targeting info
-          let targetingInfo = "Not set";
-          if (adSet?.targeting) {
-            const t = adSet.targeting;
-            const parts: string[] = [];
-            if (t.geo_locations?.countries) parts.push("Countries: " + t.geo_locations.countries.join(", "));
-            if (t.geo_locations?.cities) parts.push("Cities: " + t.geo_locations.cities.map((c: any) => c.name).join(", "));
-            if (t.age_min || t.age_max) parts.push(`Age: ${t.age_min || 18}-${t.age_max || 65}`);
-            if (t.flexible_spec?.[0]?.interests) {
-              parts.push("Interests: " + t.flexible_spec[0].interests.map((i: any) => i.name).join(", "));
-            }
-            if (parts.length > 0) targetingInfo = parts.join(" | ");
-          }
+  // Step 2: Fetch insights (no effective_status filter — insights endpoint doesn't support it)
+  const insightsUrl =
+    `${META_API}/act_${accountId}/insights` +
+    `?fields=campaign_id,campaign_name,spend,impressions,clicks,ctr,cpc,cpm,actions,action_values,purchase_roas,frequency,reach` +
+    `&level=campaign` +
+    `&date_preset=last_7d` +
+    `&limit=500` +
+    `&access_token=${token}`;
 
-          // Extract conversions from actions
-          let conversions = 0;
-          let conversionValue = 0;
-          if (insights?.actions) {
-            const purchase = insights.actions.find((a: any) =>
-              a.action_type === "purchase" || a.action_type === "offsite_conversion.fb_pixel_purchase"
-            );
-            if (purchase) conversions = parseInt(purchase.value);
-          }
-          if (insights?.action_values) {
-            const purchaseValue = insights.action_values.find((a: any) =>
-              a.action_type === "purchase" || a.action_type === "offsite_conversion.fb_pixel_purchase"
-            );
-            if (purchaseValue) conversionValue = parseFloat(purchaseValue.value);
-          }
+  const [campaigns, insights] = await Promise.all([
+    fetchAllPages(campaignsUrl),
+    fetchAllPages(insightsUrl),
+  ]);
 
-          const spend = parseFloat(insights?.spend || "0");
+  // Build insights lookup by campaign_id
+  const insightsMap = new Map<string, any>();
+  for (const row of insights) {
+    insightsMap.set(row.campaign_id, row);
+  }
 
-          campaigns.push({
-            id: c.id,
-            platform: "META",
-            name: c.name,
-            status: c.status,
-            objective: c.objective,
-            dailyBudget: c.daily_budget ? parseInt(c.daily_budget) / 100 : (adSet?.daily_budget ? parseInt(adSet.daily_budget) / 100 : 0),
-            bidStrategy: c.bid_strategy || "LOWEST_COST",
-            targeting: targetingInfo,
-            adSets: adSets.length,
-            createdAt: c.created_time,
-            updatedAt: c.updated_time,
-            startTime: c.start_time || adSet?.start_time,
-            metrics: {
-              spend,
-              impressions: parseInt(insights?.impressions || "0"),
-              clicks: parseInt(insights?.clicks || "0"),
-              ctr: parseFloat(insights?.ctr || "0"),
-              cpc: parseFloat(insights?.cpc || "0"),
-              conversions,
-              conversionValue,
-              roas: spend > 0 ? conversionValue / spend : 0,
-            },
-          });
+  // Step 3: Merge
+  return campaigns.map((c: any) => {
+    const ins = insightsMap.get(c.id);
+
+    let conversions = 0;
+    let conversionValue = 0;
+
+    if (ins?.actions) {
+      for (const a of ins.actions) {
+        if (a.action_type === "purchase" || a.action_type === "omni_purchase") {
+          conversions += parseFloat(a.value) || 0;
         }
       }
-    } catch (err: any) {
-      console.error("[campaigns] Meta Ads error:", err.message);
+    }
+    if (ins?.action_values) {
+      for (const a of ins.action_values) {
+        if (a.action_type === "purchase" || a.action_type === "omni_purchase") {
+          conversionValue += parseFloat(a.value) || 0;
+        }
+      }
+    }
+
+    const spend = parseFloat(ins?.spend) || 0;
+    const impressions = parseInt(ins?.impressions) || 0;
+    const clicks = parseInt(ins?.clicks) || 0;
+    const ctr = parseFloat(ins?.ctr) || 0;
+    const cpc = parseFloat(ins?.cpc) || 0;
+    const roas = ins?.purchase_roas?.[0]?.value ? parseFloat(ins.purchase_roas[0].value) : (spend > 0 ? conversionValue / spend : 0);
+    const cpa = conversions > 0 ? spend / conversions : 0;
+
+    const dailyBudgetRaw = parseInt(c.daily_budget) || 0;
+
+    return {
+      id: c.id,
+      name: c.name,
+      platform: "META",
+      status: c.status === "ACTIVE" ? "ACTIVE" : "PAUSED",
+      objective: c.objective || "",
+      campaignType: deriveCampaignType(c.name),
+      dailyBudget: dailyBudgetRaw / 100,
+      metrics: {
+        spend,
+        impressions,
+        clicks,
+        ctr,
+        cpc,
+        conversions,
+        conversionValue,
+        roas,
+        cpa,
+      },
+    };
+  });
+}
+
+// ── GET handler ─────────────────────────────────────────────────
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const statusFilter = searchParams.get("status") || "all";
+  const search = searchParams.get("search") || "";
+  const page = parseInt(searchParams.get("page") || "1");
+  const limit = parseInt(searchParams.get("limit") || "50");
+  const sortBy = searchParams.get("sortBy") || "spend";
+  const sortDir = searchParams.get("sortDir") || "desc";
+
+  try {
+    let allCampaigns: MergedCampaign[];
+
+    // Try cache first (cache key includes status filter)
+    const cacheKey = `${CACHE_KEY}:${statusFilter}`;
+    const cached = await redis.get(cacheKey).catch(() => null);
+
+    if (cached) {
+      allCampaigns = JSON.parse(cached);
+    } else {
+      // Fetch live from Meta API
+      allCampaigns = await fetchLiveMetaCampaigns(statusFilter);
+
+      // Cache for 5 minutes
+      await redis.set(cacheKey, JSON.stringify(allCampaigns), "EX", CACHE_TTL).catch(() => {});
+    }
+
+    // Client-side filtering: search
+    let filtered = allCampaigns;
+    if (search) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter((c) => c.name.toLowerCase().includes(q));
+    }
+
+    // Sort
+    const validSorts = ["spend", "roas", "conversions", "cpa", "ctr", "impressions", "clicks", "cpc"];
+    const sortField = validSorts.includes(sortBy) ? sortBy : "spend";
+    filtered.sort((a, b) => {
+      const aVal = (a.metrics as any)[sortField] || 0;
+      const bVal = (b.metrics as any)[sortField] || 0;
+      return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+    });
+
+    // Stats (computed before pagination)
+    const total = filtered.length;
+    const activeCount = filtered.filter((c) => c.status === "ACTIVE").length;
+    const pausedCount = filtered.filter((c) => c.status === "PAUSED").length;
+    const totalSpend = filtered.reduce((s, c) => s + c.metrics.spend, 0);
+    const totalPages = Math.ceil(total / limit);
+
+    // Paginate
+    const paginated = filtered.slice((page - 1) * limit, page * limit);
+
+    return NextResponse.json({
+      campaigns: paginated,
+      stats: {
+        total,
+        meta: total,
+        google: 0,
+        active: activeCount,
+        paused: pausedCount,
+        totalSpend,
+        totalPages,
+      },
+    });
+  } catch (error: any) {
+    console.error("[Campaigns API] Meta API failed, falling back to DB:", error.message);
+
+    // ── Fallback to database ──────────────────────────────────
+    try {
+      const where: any = {};
+      if (statusFilter && statusFilter !== "all") where.status = statusFilter.toUpperCase();
+      if (search) where.name = { contains: search, mode: "insensitive" };
+
+      const total = await db.campaign.count({ where });
+      const campaigns = await db.campaign.findMany({
+        where,
+        include: { metrics: { orderBy: { date: "desc" }, take: 30 } },
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      const result = campaigns.map((c: any) => {
+        const totalSpend = c.metrics.reduce((s: number, m: any) => s + m.spend, 0);
+        const totalImpressions = c.metrics.reduce((s: number, m: any) => s + m.impressions, 0);
+        const totalClicks = c.metrics.reduce((s: number, m: any) => s + m.clicks, 0);
+        const totalConversions = c.metrics.reduce((s: number, m: any) => s + m.conversions, 0);
+        const totalConvValue = c.metrics.reduce((s: number, m: any) => s + m.conversionValue, 0);
+        return {
+          id: c.externalId,
+          name: c.name,
+          platform: c.platform,
+          status: c.status,
+          objective: c.objective || "",
+          campaignType: c.campaignType || "",
+          dailyBudget: c.dailyBudget || 0,
+          metrics: {
+            spend: totalSpend,
+            impressions: totalImpressions,
+            clicks: totalClicks,
+            ctr: totalImpressions > 0 ? (totalClicks / totalImpressions * 100) : 0,
+            cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
+            conversions: totalConversions,
+            conversionValue: totalConvValue,
+            roas: totalSpend > 0 ? totalConvValue / totalSpend : 0,
+            cpa: totalConversions > 0 ? totalSpend / totalConversions : 0,
+          },
+        };
+      });
+
+      const activeCount = await db.campaign.count({ where: { ...where, status: "ACTIVE" } });
+      const pausedCount = await db.campaign.count({ where: { ...where, status: "PAUSED" } });
+
+      return NextResponse.json({
+        campaigns: result,
+        stats: {
+          total,
+          meta: total,
+          google: 0,
+          active: activeCount,
+          paused: pausedCount,
+          totalSpend: 0,
+          totalPages: Math.ceil(total / limit),
+        },
+        _source: "database_fallback",
+      });
+    } catch (dbError: any) {
+      console.error("[Campaigns API] DB fallback also failed:", dbError.message);
+      return NextResponse.json(
+        { campaigns: [], stats: { total: 0, meta: 0, google: 0, active: 0, paused: 0, totalSpend: 0, totalPages: 0 }, error: error.message },
+        { status: 500 }
+      );
     }
   }
-
-  // Apply filters
-  let filtered = campaigns;
-  if (statusFilter) {
-    filtered = filtered.filter(c => c.status === statusFilter.toUpperCase());
-  }
-  if (platformFilter) {
-    filtered = filtered.filter(c => c.platform === platformFilter.toUpperCase());
-  }
-
-  // Sort by created date (newest first)
-  filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-  const stats = {
-    total: filtered.length,
-    active: filtered.filter(c => c.status === "ACTIVE").length,
-    paused: filtered.filter(c => c.status === "PAUSED").length,
-    totalSpend: filtered.reduce((sum, c) => sum + (c.metrics?.spend || 0), 0),
-  };
-
-  return NextResponse.json({ campaigns: filtered, stats });
 }

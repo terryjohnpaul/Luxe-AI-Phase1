@@ -4,6 +4,7 @@ import type { Signal } from "@/lib/signals/types";
 import { getBrandsByTier, type BrandTier, TIER_RULES } from "@/lib/signals/brand-config";
 import { getHeroForContext, getTopHero, type HeroProduct } from "@/lib/signals/product-catalog";
 import { db } from "@/lib/db";
+import { getDataDrivenTargeting, type TargetingRecommendation } from "@/lib/engines/targeting-engine";
 
 // ============================================================
 // PREDICTION ENGINE
@@ -383,7 +384,7 @@ function getUrgency(signal: Signal): "urgent" | "high" | "medium" | "opportunity
 }
 
 // Generate actionable ad recommendations from signals, adjusted by tier
-function generateAdRecommendation(signal: Signal, tiers: BrandTier[] = ["luxury", "premium", "accessible"]) {
+function generateAdRecommendation(signal: Signal, tiers: BrandTier[] = ["luxury", "premium", "accessible"], dataDriven?: TargetingRecommendation | null) {
   const isLuxuryOnly = tiers.length === 1 && tiers[0] === "luxury";
   const isAccessibleOnly = tiers.length === 1 && tiers[0] === "accessible";
   const hasPremium = tiers.includes("premium");
@@ -435,9 +436,26 @@ function generateAdRecommendation(signal: Signal, tiers: BrandTier[] = ["luxury"
 
     targeting: {
       archetypes: tierArchetypes,
-      location: signal.location,
+      location: dataDriven?.location || signal.location,
       timing: getTimingForSignal(signal),
       platforms: getPlatformSplit(signal),
+      // Data-driven targeting with hardcoded fallback
+      ...(dataDriven ? {
+        ageRange: dataDriven.ageRange,
+        ageReason: dataDriven.ageReason,
+        gender: dataDriven.gender,
+        genderReason: dataDriven.genderReason,
+        locationReason: dataDriven.locationReason,
+        devices: dataDriven.devices,
+        deviceReason: dataDriven.deviceReason,
+        placements: dataDriven.placements,
+        placementReason: dataDriven.placementReason,
+        interests: dataDriven.interests,
+        audiences: dataDriven.audiences,
+        exclusions: dataDriven.exclusions,
+        languages: dataDriven.languages,
+        optimizationGoal: dataDriven.optimizationGoal,
+      } : getTargetingForSignal(signal, SIGNAL_TYPE_BENCHMARKS[signal.type] || deriveBenchmark(signal))),
     },
 
     budget: {
@@ -632,6 +650,182 @@ function getPlatformSplit(signal: Signal) {
     return { meta: "55%", google: "45%", reason: "Commercial intent → balanced split" };
   }
   return { meta: "65%", google: "35%", reason: "Default luxury fashion split" };
+}
+
+// ============================================================
+// COMPREHENSIVE AD TARGETING
+// Returns detailed targeting parameters based on signal type,
+// calibrated from Rs 144 Cr ad spend analysis.
+// ============================================================
+
+function getTargetingForSignal(signal: Signal, bench: typeof SIGNAL_TYPE_BENCHMARKS[string]) {
+  const type = signal.type;
+  const data = signal.data || {};
+  const signalText = (signal.title + " " + signal.description + " " + signal.triggersWhat).toLowerCase();
+
+  // --- AGE RANGE ---
+  let ageRange = "25-44";
+  if (["wedding", "festival", "gift_occasion", "life_event", "auspicious_day", "weather", "festival_fashion"].includes(type)) {
+    ageRange = "25-54";
+  } else if (["celebrity", "aesthetic", "social_trend", "entertainment", "ott_release", "runway"].includes(type)) {
+    ageRange = "18-34";
+  } else if (["competitor", "search_trend", "salary_cycle", "economic", "launch"].includes(type)) {
+    ageRange = "25-44";
+  } else if (type === "cricket") {
+    ageRange = "18-44";
+  }
+
+  // --- GENDER ---
+  let gender = "All";
+  if (type === "aesthetic") {
+    const aesName = (data.aesthetic || signalText).toLowerCase();
+    if (["coquette", "balletcore", "cottagecore", "soft girl", "clean girl", "vanilla girl", "tomato girl"].some(a => aesName.includes(a))) {
+      gender = "Female";
+    }
+  } else if (type === "cricket") {
+    gender = "Male";
+  } else if (type === "celebrity") {
+    // Male celeb → target Female audience, Female celeb → target Male audience
+    const celeb = (data.celebrity || "").toLowerCase();
+    const femaleCelebs = ["deepika", "alia", "katrina", "ananya", "janhvi", "kiara", "sobhita", "priyanka", "sonam"];
+    const maleCelebs = ["ranveer", "ranbir", "shah rukh", "srk", "virat", "siddhant", "varun", "arjun", "hrithik"];
+    if (femaleCelebs.some(c => celeb.includes(c))) gender = "Male";
+    else if (maleCelebs.some(c => celeb.includes(c))) gender = "Female";
+  }
+
+  // --- INTERESTS (Meta interest targeting keywords) ---
+  const baseInterests = ["Luxury goods", "Online shopping", "Fashion"];
+  let interests = [...baseInterests];
+  if (["wedding", "life_event"].includes(type)) {
+    interests.push("Wedding planning", "Bridal fashion", "Indian weddings", "Wedding guest outfits");
+  }
+  if (["festival", "auspicious_day", "festival_fashion"].includes(type)) {
+    interests.push("Indian festivals", "Ethnic wear", "Traditional fashion", "Festive shopping");
+  }
+  if (type === "cricket") {
+    interests.push("Cricket", "IPL", "Sports fashion", "Athleisure");
+  }
+  if (type === "celebrity" || type === "entertainment") {
+    interests.push("Bollywood", "Celebrity fashion", "Celebrity news", "Entertainment");
+  }
+  if (type === "search_trend" || type === "competitor") {
+    if (signalText.includes("bag") || signalText.includes("handbag")) {
+      interests.push("Designer handbags", "Luxury bags", "Coach", "Michael Kors");
+    }
+    if (signalText.includes("sneaker") || signalText.includes("shoe")) {
+      interests.push("Sneakers", "Designer shoes", "Nike", "Adidas");
+    }
+    if (signalText.includes("watch")) {
+      interests.push("Luxury watches", "Tissot", "Fossil");
+    }
+    if (signalText.includes("perfume") || signalText.includes("fragrance")) {
+      interests.push("Fragrances", "Perfume", "Designer fragrance");
+    }
+  }
+  if (type === "aesthetic" || type === "social_trend") {
+    interests.push("Fashion trends", "Style inspiration", "Instagram fashion");
+  }
+  if (type === "runway" || type === "fashion_event") {
+    interests.push("Fashion week", "Runway fashion", "Designer clothing", "High fashion");
+  }
+  if (type === "weather") {
+    if (signalText.includes("heat") || signalText.includes("summer")) {
+      interests.push("Summer fashion", "Sunglasses", "Lightweight clothing");
+    } else if (signalText.includes("rain") || signalText.includes("monsoon")) {
+      interests.push("Monsoon fashion", "Waterproof accessories");
+    }
+  }
+  if (type === "salary_cycle") {
+    interests.push("Premium lifestyle", "Self-reward shopping", "Career professionals");
+  }
+  if (type === "gift_occasion") {
+    interests.push("Gift shopping", "Luxury gifting", "Anniversary gifts", "Birthday gifts");
+  }
+  if (type === "launch" || type === "category_demand") {
+    interests.push("New arrivals", "Brand launches", "Early adopters");
+  }
+
+  // --- PLACEMENTS (Reels best ROAS from data: 7.45x vs Stories 3.47x) ---
+  let placements: string[];
+  if (["cricket", "entertainment", "celebrity", "social_trend", "aesthetic"].includes(type)) {
+    placements = ["Instagram Reels (best ROAS — 7.45x)", "Instagram Stories", "YouTube Shorts", "Facebook Reels"];
+  } else if (["competitor", "search_trend", "salary_cycle"].includes(type)) {
+    placements = ["Google Shopping", "Google Search", "Instagram Feed", "Instagram Reels (best ROAS — 7.45x)"];
+  } else {
+    placements = ["Instagram Reels (best ROAS — 7.45x)", "Instagram Stories", "Instagram Feed", "Facebook Feed", "Google Shopping"];
+  }
+
+  // --- DEVICES (Android 2.5x better ROAS from 144 Cr data: 9.52x vs 3.60x) ---
+  const devices = ["Mobile — Android priority (9.52x ROAS vs iOS 3.60x)", "Mobile — iOS", "Desktop"];
+
+  // --- AUDIENCES ---
+  let audiences: string[];
+  if (["wedding", "life_event"].includes(type)) {
+    audiences = ["Lookalike 1-3% of purchasers", "Interest: Wedding planning + Luxury", "Engaged shoppers 30d"];
+  } else if (["festival", "auspicious_day", "festival_fashion"].includes(type)) {
+    audiences = ["Lookalike 1-3% of festive season purchasers", "Interest: Festival shopping + Fashion"];
+  } else if (["competitor", "search_trend"].includes(type)) {
+    audiences = ["Cart abandoners 7d", "Product viewers 14d", "Wishlist users 30d", "Lookalike 1-3% of purchasers"];
+  } else if (type === "salary_cycle") {
+    audiences = ["IT professionals in Bangalore/Hyderabad/Pune", "Lookalike 1-3% of high-AOV purchasers"];
+  } else if (type === "gift_occasion") {
+    audiences = ["Lookalike 1-3% of gift purchasers", "Interest: Gift shopping + Luxury brands"];
+  } else {
+    audiences = ["Lookalike 1-5% of all purchasers", "Broad with Advantage+ optimization"];
+  }
+
+  // --- EXCLUSIONS ---
+  let exclusions: string[];
+  if (["competitor", "search_trend"].includes(type)) {
+    exclusions = ["Purchasers last 30d", "Low-value browsers (visited < 2 pages)"];
+  } else {
+    exclusions = ["Existing purchasers last 7d"];
+  }
+  if (bench.intentLevel === "high") {
+    exclusions.push("Low-value browsers (visited < 2 pages)");
+  }
+  // Deduplicate
+  exclusions = [...new Set(exclusions)];
+
+  // --- LANGUAGES ---
+  let languages = ["English", "Hindi"];
+  if (signalText.includes("karnataka") || signalText.includes("bangalore") || signalText.includes("bengaluru")) {
+    languages.push("Kannada");
+  } else if (signalText.includes("tamil") || signalText.includes("chennai")) {
+    languages.push("Tamil");
+  } else if (signalText.includes("telugu") || signalText.includes("hyderabad")) {
+    languages.push("Telugu");
+  } else if (signalText.includes("maharashtra") || signalText.includes("mumbai") || signalText.includes("pune")) {
+    languages.push("Marathi");
+  } else if (signalText.includes("kolkata") || signalText.includes("bengal")) {
+    languages.push("Bengali");
+  } else if (signalText.includes("kerala") || signalText.includes("kochi")) {
+    languages.push("Malayalam");
+  }
+
+  // --- OPTIMIZATION GOAL (by signal intent level) ---
+  let optimizationGoal: string;
+  if (["wedding", "festival", "life_event", "competitor", "search_trend", "salary_cycle",
+       "gift_occasion", "auspicious_day", "launch", "sale_event", "festival_fashion"].includes(type)) {
+    optimizationGoal = "Purchase";
+  } else if (["weather", "social_trend", "aesthetic", "category_demand", "occasion_dressing",
+              "inventory", "travel", "runway"].includes(type)) {
+    optimizationGoal = "Add to Cart";
+  } else {
+    optimizationGoal = "Landing Page Views";
+  }
+
+  return {
+    ageRange,
+    gender,
+    interests,
+    placements,
+    devices,
+    audiences,
+    exclusions,
+    languages,
+    optimizationGoal,
+  };
 }
 
 function getBudgetForSignal(signal: Signal): string {
@@ -980,7 +1174,26 @@ export async function GET(request: Request) {
     }
 
     // Step 3: Build predictions and filter by ROAS (only show positive-ROI recommendations)
-    const allRecs = deduped.map(s => generateAdRecommendation(s, activeTiers));
+    // Fetch data-driven targeting per signal type (cached 6hrs in Redis per type)
+    const targetingCache = new Map<string, TargetingRecommendation | null>();
+    async function getTargetingForType(signalType: string, location?: string): Promise<TargetingRecommendation | null> {
+      const key = signalType + ":" + (location || "pan");
+      if (targetingCache.has(key)) return targetingCache.get(key)!;
+      try {
+        const result = await getDataDrivenTargeting(signalType, undefined, location);
+        targetingCache.set(key, result);
+        return result;
+      } catch (err) {
+        console.error(`[TargetingEngine] Failed for type=${signalType}:`, err);
+        targetingCache.set(key, null);
+        return null;
+      }
+    }
+
+    const allRecs = await Promise.all(deduped.map(async (s) => {
+      const targeting = await getTargetingForType(s.type, s.location);
+      return generateAdRecommendation(s, activeTiers, targeting);
+    }));
     const positiveROI = allRecs.filter(r => {
       const roasStr = r.prediction.estimatedROAS || "0";
       const minROAS = parseFloat(roasStr.split("-")[0]) || 0;
