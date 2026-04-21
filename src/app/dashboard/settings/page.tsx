@@ -30,11 +30,15 @@ import { cn } from "@/lib/utils/cn";
 interface ConnectedAccount {
   id: string;
   platform: string;
+  accountId: string;
   accountName: string;
+  currency: string;
   type: string;
   status: "connected" | "error" | "expired";
   lastSync: string;
   permissions: string[];
+  connectedAt: string;
+  isDefault?: boolean;
 }
 
 interface ApiKey {
@@ -127,6 +131,8 @@ function getStoredProfile(): BusinessProfile {
   return { type: "marketplace", name: "" };
 }
 
+const AUTH = "Basic " + (typeof btoa !== "undefined" ? btoa("admin:luxeai2026") : "");
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"profile" | "accounts" | "api" | "team" | "notifications">("profile");
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
@@ -134,12 +140,32 @@ export default function SettingsPage() {
   const [profileSaved, setProfileSaved] = useState(false);
   const [adConnection, setAdConnection] = useState<any>(null);
   const [connectionLoading, setConnectionLoading] = useState(true);
+  const [dbAccounts, setDbAccounts] = useState<ConnectedAccount[]>([]);
+  const [dbAccountsLoading, setDbAccountsLoading] = useState(true);
+
+  const fetchAccounts = () => {
+    setDbAccountsLoading(true);
+    fetch("/api/settings/accounts", { headers: { Authorization: AUTH } })
+      .then(r => r.json())
+      .then(data => { setDbAccounts(data.accounts || []); setDbAccountsLoading(false); })
+      .catch(() => setDbAccountsLoading(false));
+  };
+
+  async function setAsDefault(accountId: string) {
+    await fetch("/api/settings/accounts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: AUTH },
+      body: JSON.stringify({ accountId }),
+    });
+    fetchAccounts();
+  }
 
   useEffect(() => {
     fetch("/api/ads/push-draft")
       .then(r => r.json())
       .then(data => { setAdConnection(data); setConnectionLoading(false); })
       .catch(() => setConnectionLoading(false));
+    fetchAccounts();
   }, []);
 
   const getConnectionStatus = (platformId: string): boolean => {
@@ -370,10 +396,12 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted">
               {connectionLoading ? "Checking connections..." :
-                CONNECTABLE_ACCOUNTS.filter(a => getConnectionStatus(a.id)).length + " of " + CONNECTABLE_ACCOUNTS.length + " ad accounts connected"
+                CONNECTABLE_ACCOUNTS.filter(a => getConnectionStatus(a.id)).length + " of " + CONNECTABLE_ACCOUNTS.length + " ad platform connections"
               }
             </p>
           </div>
+
+          {/* OAuth Platform Cards */}
           <div className="grid grid-cols-2 gap-4">
             {CONNECTABLE_ACCOUNTS.map((account) => {
               const isConnected = getConnectionStatus(account.id);
@@ -417,6 +445,66 @@ export default function SettingsPage() {
               );
             })}
           </div>
+
+          {/* Ad Accounts from Database */}
+          {dbAccountsLoading ? (
+            <div className="glass-card p-5 text-sm text-muted">Loading ad accounts...</div>
+          ) : dbAccounts.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Ad Accounts ({dbAccounts.length})</h3>
+              <div className="grid grid-cols-1 gap-3">
+                {dbAccounts.map((acc) => {
+                  const isMeta = acc.platform === "META";
+                  const isGoogle = acc.platform === "GOOGLE";
+                  return (
+                    <div key={acc.id} className={cn(
+                      "glass-card p-4 flex items-center justify-between",
+                      isGoogle && "ring-1 ring-green-200",
+                      isMeta && "ring-1 ring-blue-200",
+                    )}>
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-xs",
+                          isMeta ? "bg-blue-600" : "bg-green-600"
+                        )}>
+                          {isMeta ? "M" : "G"}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">
+                              {isMeta ? "Meta Ads" : "Google Ads"}
+                            </span>
+                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check size={8} /> {acc.status}
+                            </span>
+                            {acc.isDefault && (
+                              <span className="text-[10px] bg-yellow-100 text-yellow-700 border border-yellow-200 px-2 py-0.5 rounded-full">
+                                ⭐ Default
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted mt-0.5">
+                            {acc.accountName} — {acc.accountId}
+                            {acc.currency ? ` (${acc.currency})` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!acc.isDefault && (
+                          <button
+                            onClick={() => setAsDefault(acc.id)}
+                            className="text-xs px-3 py-1.5 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 flex items-center gap-1"
+                          >
+                            ⭐ Set as Default
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Connection help */}
           <div className="glass-card p-5">

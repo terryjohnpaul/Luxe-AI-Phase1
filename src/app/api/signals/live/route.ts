@@ -65,6 +65,80 @@ const SIGNAL_TYPE_BENCHMARKS: Record<string, { baseCTR: number; baseConvRate: nu
   compound_signal:    { baseCTR: 1.5, baseConvRate: 0.8, engagementMultiplier: 1.2, intentLevel: "high",    liftNote: "Multi-dimensional compound: 4-5 signals aligning = highest confidence predictions." },
 };
 
+// ============================================================
+// SIGNAL CATEGORY & DATA SOURCE ATTRIBUTION
+// External = things happening in the world
+// Internal = things happening in your ad data
+// ============================================================
+
+const EXTERNAL_TYPES = new Set([
+  "wedding", "festival", "cricket", "weather", "celebrity",
+  "search_trend", "social_trend", "life_event", "auspicious_day",
+  "entertainment", "ott_release", "travel", "launch", "runway",
+  "fashion_event", "gift_occasion", "occasion_dressing",
+  "sale_event", "aesthetic",
+]);
+
+const INTERNAL_TYPES = new Set([
+  "category_demand", "economic", "regional", "competitor",
+  "salary_cycle", "daypart", "demographic", "geo_index",
+  "brand_demand", "content_truth", "competitive_landscape",
+  "placement_rule", "funnel_benchmark", "festival_fashion",
+  "compound_signal", "consumer_calendar", "sale_dynamics",
+  "frequency_monitor", "creative_performance", "funnel_health",
+  "meta_performance", "placement_efficiency", "cross_platform",
+  "demographic_shifts", "geo_performance",
+]);
+
+const DATA_SOURCES: Record<string, string> = {
+  // External
+  wedding: "Hindu Panchang Calendar + Google Trends",
+  festival: "Indian Festival Calendar 2026",
+  cricket: "CricAPI Live Data",
+  weather: "WeatherAPI.com — 20 Indian cities",
+  celebrity: "NewsAPI — Bollywood & Celebrity News",
+  search_trend: "DataForSEO — Google Search Volume",
+  social_trend: "Apify — Instagram & Pinterest Scraper",
+  life_event: "Google Trends + Cultural Calendar",
+  auspicious_day: "Hindu Panchang 2026",
+  entertainment: "TMDB + Bollywood Calendar",
+  launch: "Brand Websites + Fashion News",
+  runway: "Fashion Week Reports + Lyst Data",
+  fashion_event: "NewsAPI + Fashion Event Calendar",
+  gift_occasion: "Indian Gift Calendar",
+  occasion_dressing: "Google Trends — Occasion Searches",
+  sale_event: "Ajio Luxe Sale Calendar",
+  aesthetic: "Google Trends + Instagram via Apify",
+  travel: "Holiday Calendar + Google Trends",
+  ott_release: "TMDB + OTT Platform Calendars",
+  // Internal
+  category_demand: "Ajio Luxe Meta Ads — ₹96 Cr Spend Data",
+  economic: "Yahoo Finance (Nifty/Sensex) + Ajio Luxe Ad Data",
+  regional: "Ajio Luxe Geo Breakdown — 55K Location Records",
+  competitor: "DataForSEO SERP + Auction Insights — ₹46 Cr Google Data",
+  salary_cycle: "Indian Payroll Calendar + Ajio Luxe Monthly Trends",
+  daypart: "Ajio Luxe Hourly Performance — Meta + Google APIs",
+  demographic: "Ajio Luxe Age-Gender Breakdown — 4.2K Records",
+  brand_demand: "Ajio Luxe Brand Performance — 981 Campaigns",
+  content_truth: "Ajio Luxe Ad Copy Analysis — 60K Creatives",
+  competitive_landscape: "Google Ads Auction Insights",
+  placement_rule: "Ajio Luxe Placement Breakdown — Meta API",
+  funnel_benchmark: "Ajio Luxe Funnel Data — 25M Cart Events",
+  compound_signal: "Multi-Signal Intersection Engine",
+  consumer_calendar: "Ajio Luxe Monthly Performance — 10 Years",
+  sale_dynamics: "Ajio Luxe Sale Event Analysis — EOSS/BFS/BBS",
+  geo_index: "Ajio Luxe Regional CPA Index — 36 States",
+  frequency_monitor: "Meta Ads API — Campaign Frequency Data",
+  creative_performance: "Meta Ads API — Ad Creative Insights",
+  funnel_health: "Meta Ads API — Funnel Actions Data",
+  meta_performance: "Meta Ads API — Live Campaign Metrics",
+  placement_efficiency: "Meta Ads API — Placement Breakdown",
+  cross_platform: "Meta + Google Ads — Cross-Platform Analysis",
+  demographic_shifts: "Meta Ads API — Age/Gender Breakdown",
+  geo_performance: "Meta + Google Ads — Regional Performance",
+  festival_fashion: "Festival-Fashion Mapping Engine",
+};
+
 // Severity adds a mild boost, not a massive multiplier — prevents unrealistic compounding
 const SEVERITY_MULTIPLIERS: Record<string, number> = {
   critical: 1.15,
@@ -1066,6 +1140,114 @@ function addIndiaRelevance(rec: any): any {
   return { ...rec, indiaRelevance: { score, note } };
 }
 
+
+// ============================================================
+// SOURCE URL GENERATOR — clickable links to external signal sources
+// ============================================================
+
+function getSourceUrl(signal: Signal): string | null {
+  const type = signal.type;
+  const title = signal.title || "";
+  const data = signal.data || {};
+
+  switch(type) {
+    case "celebrity":
+      if (data.url) return data.url;
+      if (data.articleUrl) return data.articleUrl;
+      const celebName = title.match(/^(.+?) trending/)?.[1] || "";
+      if (celebName) return `https://news.google.com/search?q=${encodeURIComponent(celebName + " fashion")}`;
+      return null;
+
+    case "search_trend": {
+      const product = title.match(/Trending.*?: (.+?) —/)?.[1] || "";
+      if (product) return `https://trends.google.com/trends/explore?geo=IN&q=${encodeURIComponent(product)}`;
+      return null;
+    }
+
+    case "social_trend": {
+      const hashtag = title.match(/#(\w+)/)?.[1] || "";
+      if (hashtag) return `https://www.instagram.com/explore/tags/${hashtag}/`;
+      const trend = title.match(/Trending: "(.+?)"/)?.[1] || "";
+      if (trend) return `https://trends.google.com/trends/explore?geo=IN&q=${encodeURIComponent(trend)}`;
+      return null;
+    }
+
+    case "cricket":
+      return "https://www.espncricinfo.com/live-cricket-score";
+
+    case "weather": {
+      const city = signal.location || "";
+      if (city && city !== "Pan India") return `https://weather.com/en-IN/weather/today/l/${encodeURIComponent(city)}`;
+      return "https://weather.com/en-IN/";
+    }
+
+    case "festival": {
+      const festName = title.match(/^(.+?)(?:\s+—|\s+Fashion|\s+\()/)?.[1] || title.split(" — ")[0] || "";
+      if (festName) return `https://www.google.com/search?q=${encodeURIComponent(festName + " 2026 India")}`;
+      return null;
+    }
+
+    case "wedding":
+      return "https://www.google.com/search?q=indian+wedding+season+2026+dates";
+
+    case "auspicious_day": {
+      const dayName = title.split(" — ")[0] || title.split("(")[0] || "";
+      if (dayName) return `https://www.google.com/search?q=${encodeURIComponent(dayName.trim() + " 2026 date")}`;
+      return null;
+    }
+
+    case "launch": {
+      const brand = title.match(/^(\w[\w\s]+?) new launch/)?.[1] || "";
+      if (brand) return `https://www.google.com/search?q=${encodeURIComponent(brand + " new collection 2026")}`;
+      return null;
+    }
+
+    case "runway": {
+      const runwayTrend = title.match(/Runway-to-Retail: "(.+?)"/)?.[1] || "";
+      if (runwayTrend) return `https://www.google.com/search?q=${encodeURIComponent(runwayTrend + " fashion trend 2026")}`;
+      return null;
+    }
+
+    case "fashion_event":
+      return "https://www.google.com/search?q=fashion+week+2026+schedule";
+
+    case "entertainment":
+    case "ott_release":
+      return "https://www.google.com/search?q=new+bollywood+movies+2026";
+
+    case "aesthetic": {
+      const aesName = title.match(/"(.+?)"/)?.[1] || "";
+      if (aesName) return `https://trends.google.com/trends/explore?geo=IN&q=${encodeURIComponent(aesName)}`;
+      return null;
+    }
+
+    case "gift_occasion":
+      return null;
+
+    case "occasion_dressing": {
+      const occasion = title.split(" — ")[0] || "";
+      if (occasion) return `https://trends.google.com/trends/explore?geo=IN&q=${encodeURIComponent(occasion)}`;
+      return null;
+    }
+
+    case "sale_event":
+      return "https://luxe.ajio.com/";
+
+    case "travel":
+      return "https://www.google.com/search?q=long+weekends+india+2026";
+
+    case "competitor":
+      if (title.includes("TataCLiQ")) return "https://www.tatacliq.com/luxury";
+      if (title.includes("Myntra")) return "https://www.myntra.com/luxe";
+      if (title.includes("Amazon")) return "https://www.amazon.in/luxury-beauty";
+      if (title.includes("Farfetch")) return "https://www.farfetch.com/in/";
+      return null;
+
+    default:
+      return null;
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const category = searchParams.get("category") || "all";
@@ -1109,7 +1291,13 @@ export async function GET(request: Request) {
     }
 
     if (mode === "signals") {
-      return NextResponse.json({ signals, count: signals.length, fetchedAt: cache!.fetchedAt });
+      const enrichedSigs = signals.map(s => ({
+        ...s,
+        signalCategory: EXTERNAL_TYPES.has(s.type) ? "external" as const : "internal" as const,
+        dataSource: DATA_SOURCES[s.type] || "LUXE AI Intelligence Engine",
+        sourceUrl: getSourceUrl(s),
+      }));
+      return NextResponse.json({ signals: enrichedSigs, count: enrichedSigs.length, fetchedAt: cache!.fetchedAt });
     }
 
     // Default "full" mode: signals + ad recommendations
@@ -1220,11 +1408,24 @@ export async function GET(request: Request) {
       console.error("[Flywheel] Persist error (non-blocking):", err)
     );
 
+    // Enrich signals with category and data source
+    const enrichedSignals = signals.map(s => ({
+      ...s,
+      signalCategory: EXTERNAL_TYPES.has(s.type) ? "external" as const : "internal" as const,
+      dataSource: DATA_SOURCES[s.type] || "LUXE AI Intelligence Engine",
+      sourceUrl: getSourceUrl(s),
+    }));
+
+    const externalCount = enrichedSignals.filter(s => s.signalCategory === "external").length;
+    const internalCount = enrichedSignals.filter(s => s.signalCategory === "internal").length;
+
     return NextResponse.json({
-      signals,
+      signals: enrichedSignals,
       recommendations,
-      signalCount: signals.length,
+      signalCount: enrichedSignals.length,
       recommendationCount: recommendations.length,
+      externalCount,
+      internalCount,
       fetchedAt: cache!.fetchedAt,
       sources: cache!.sources,
     });

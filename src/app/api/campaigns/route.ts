@@ -6,6 +6,72 @@ const META_API = "https://graph.facebook.com/v25.0";
 const CACHE_KEY = "campaigns:live:meta";
 const CACHE_TTL = 300; // 5 minutes
 
+// ── Account resolver ────────────────────────────────────────────
+async function resolveAccount(account: string) {
+  // Map short account IDs to Meta account IDs for DB lookup
+  const accountIdMap: Record<string, string> = {
+    ajio: "202330961584003",
+    luxeai: "1681306899957928",
+  };
+  const targetAccountId = accountIdMap[account];
+
+  // Try to resolve from ConnectedAccount DB first
+  try {
+    if (targetAccountId) {
+      const dbAccounts: any[] = await db.$queryRaw`
+        SELECT "accountId", "accountName", "accessToken"
+        FROM "ConnectedAccount"
+        WHERE status = 'active' AND platform = 'META' AND "accountId" = ${targetAccountId}
+        LIMIT 1
+      `;
+      if (dbAccounts && dbAccounts.length > 0) {
+        const acc = dbAccounts[0];
+        return {
+          token: acc.accessToken,
+          accountId: acc.accountId,
+          accountName: acc.accountName,
+          tokenEnvName: "DB:ConnectedAccount",
+        };
+      }
+    } else {
+      // For dynamically added accounts, try matching by account param as accountId
+      const dbAccounts: any[] = await db.$queryRaw`
+        SELECT "accountId", "accountName", "accessToken"
+        FROM "ConnectedAccount"
+        WHERE status = 'active' AND platform = 'META' AND "accountId" = ${account}
+        LIMIT 1
+      `;
+      if (dbAccounts && dbAccounts.length > 0) {
+        const acc = dbAccounts[0];
+        return {
+          token: acc.accessToken,
+          accountId: acc.accountId,
+          accountName: acc.accountName,
+          tokenEnvName: "DB:ConnectedAccount",
+        };
+      }
+    }
+  } catch (err: any) {
+    console.error('[Campaigns] DB account resolve failed, using env fallback:', err.message);
+  }
+
+  // Fallback to .env
+  if (account === "luxeai") {
+    return {
+      token: process.env.META_ADS_ACCESS_TOKEN,
+      accountId: process.env.META_ADS_ACCOUNT_ID || "1681306899957928",
+      accountName: "Luxe AI Ads",
+      tokenEnvName: "META_ADS_ACCESS_TOKEN",
+    };
+  }
+  return {
+    token: process.env.AJIO_LUXE_META_ACCESS_TOKEN,
+    accountId: process.env.AJIO_LUXE_META_ACCOUNT_ID || "202330961584003",
+    accountName: "Ajio Luxe",
+    tokenEnvName: "AJIO_LUXE_META_ACCESS_TOKEN",
+  };
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 function deriveCampaignType(name: string): string {
@@ -65,11 +131,7 @@ interface MergedCampaign {
   };
 }
 
-async function fetchLiveMetaCampaigns(statusFilter?: string): Promise<MergedCampaign[]> {
-  const token = process.env.AJIO_LUXE_META_ACCESS_TOKEN;
-  const accountId = process.env.AJIO_LUXE_META_ACCOUNT_ID || "202330961584003";
-  if (!token) throw new Error("AJIO_LUXE_META_ACCESS_TOKEN not set");
-
+async function fetchLiveMetaCampaigns(token: string, accountId: string, statusFilter?: string): Promise<MergedCampaign[]> {
   // Build status filter for Meta API
   const statuses = statusFilter && statusFilter !== "all"
     ? [statusFilter.toUpperCase()]
@@ -166,6 +228,7 @@ async function fetchLiveMetaCampaigns(statusFilter?: string): Promise<MergedCamp
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const account = searchParams.get("account") || "ajio";
   const statusFilter = searchParams.get("status") || "all";
   const search = searchParams.get("search") || "";
   const page = parseInt(searchParams.get("page") || "1");
@@ -173,18 +236,22 @@ export async function GET(request: Request) {
   const sortBy = searchParams.get("sortBy") || "spend";
   const sortDir = searchParams.get("sortDir") || "desc";
 
+  const { token, accountId, accountName, tokenEnvName } = await resolveAccount(account);
+
   try {
     let allCampaigns: MergedCampaign[];
 
-    // Try cache first (cache key includes status filter)
-    const cacheKey = `${CACHE_KEY}:${statusFilter}`;
+    // Try cache first (cache key includes account and status filter)
+    const cacheKey = `${CACHE_KEY}:${account}:${statusFilter}`;
     const cached = await redis.get(cacheKey).catch(() => null);
 
     if (cached) {
       allCampaigns = JSON.parse(cached);
     } else {
+      if (!token) throw new Error(`${tokenEnvName} not set`);
+
       // Fetch live from Meta API
-      allCampaigns = await fetchLiveMetaCampaigns(statusFilter);
+      allCampaigns = await fetchLiveMetaCampaigns(token, accountId, statusFilter);
 
       // Cache for 5 minutes
       await redis.set(cacheKey, JSON.stringify(allCampaigns), "EX", CACHE_TTL).catch(() => {});
@@ -226,6 +293,8 @@ export async function GET(request: Request) {
         paused: pausedCount,
         totalSpend,
         totalPages,
+        accountName,
+        accountId,
       },
     });
   } catch (error: any) {
@@ -286,13 +355,15 @@ export async function GET(request: Request) {
           paused: pausedCount,
           totalSpend: 0,
           totalPages: Math.ceil(total / limit),
+          accountName,
+          accountId,
         },
         _source: "database_fallback",
       });
     } catch (dbError: any) {
       console.error("[Campaigns API] DB fallback also failed:", dbError.message);
       return NextResponse.json(
-        { campaigns: [], stats: { total: 0, meta: 0, google: 0, active: 0, paused: 0, totalSpend: 0, totalPages: 0 }, error: error.message },
+        { campaigns: [], stats: { total: 0, meta: 0, google: 0, active: 0, paused: 0, totalSpend: 0, totalPages: 0, accountName, accountId }, error: error.message },
         { status: 500 }
       );
     }

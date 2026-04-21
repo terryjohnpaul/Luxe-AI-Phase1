@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
 
 const META_API = "https://graph.facebook.com/v25.0";
-const TOKEN = process.env.AJIO_LUXE_META_ACCESS_TOKEN || "";
+
+function resolveToken(account: string) {
+  if (account === "luxeai") {
+    return {
+      token: process.env.META_ADS_ACCESS_TOKEN,
+      envName: "META_ADS_ACCESS_TOKEN",
+    };
+  }
+  return {
+    token: process.env.AJIO_LUXE_META_ACCESS_TOKEN,
+    envName: "AJIO_LUXE_META_ACCESS_TOKEN",
+  };
+}
 
 // ── Ajio Luxe Benchmarks ──
 const BENCHMARKS = {
@@ -18,7 +30,7 @@ const BENCHMARKS = {
 
 // ── Helpers ──
 function fmtINR(v: number): string {
-  return "₹" + Math.round(v).toLocaleString("en-IN");
+  return "\u20B9" + Math.round(v).toLocaleString("en-IN");
 }
 
 function extractPurchases(actions: any[] | undefined): number {
@@ -62,9 +74,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: campaignId } = await params;
+  const body = await request.json();
+  const account = body.account || new URL(request.url).searchParams.get("account") || "ajio";
+  const { token: TOKEN, envName } = resolveToken(account);
 
   if (!TOKEN) {
-    return NextResponse.json({ error: "AJIO_LUXE_META_ACCESS_TOKEN not configured" }, { status: 500 });
+    return NextResponse.json({ error: `${envName} not configured` }, { status: 500 });
   }
 
   try {
@@ -79,21 +94,13 @@ export async function POST(
       insightsDailyRes,
       insightsAdLevelRes,
     ] = await Promise.allSettled([
-      // Campaign details
       metaGet(`${META_API}/${campaignId}?fields=name,status,objective,daily_budget,lifetime_budget,bid_strategy,start_time,created_time&access_token=${TOKEN}`),
-      // Ad sets
       metaGet(`${META_API}/${campaignId}/adsets?fields=id,name,status,daily_budget,optimization_goal,billing_event,bid_strategy,targeting,start_time,end_time&limit=50&access_token=${TOKEN}`),
-      // Ads
       metaGet(`${META_API}/${campaignId}/ads?fields=id,name,status,creative{id,title,body,call_to_action_type,image_url,thumbnail_url,video_id,object_story_spec}&limit=50&access_token=${TOKEN}`),
-      // Insights: age+gender
       metaGet(`${META_API}/${campaignId}/insights?fields=spend,impressions,clicks,actions,purchase_roas&breakdowns=age,gender&date_preset=last_7d&access_token=${TOKEN}`),
-      // Insights: placement
       metaGet(`${META_API}/${campaignId}/insights?fields=spend,impressions,clicks,actions,purchase_roas&breakdowns=publisher_platform,platform_position&date_preset=last_7d&access_token=${TOKEN}`),
-      // Insights: device
       metaGet(`${META_API}/${campaignId}/insights?fields=spend,impressions,clicks,actions,purchase_roas&breakdowns=device_platform&date_preset=last_7d&access_token=${TOKEN}`),
-      // Insights: daily trend
       metaGet(`${META_API}/${campaignId}/insights?fields=spend,impressions,clicks,actions,purchase_roas,ctr,cpc&time_increment=1&date_preset=last_7d&access_token=${TOKEN}`),
-      // Insights: ad level
       metaGet(`${META_API}/${campaignId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,actions,purchase_roas,ctr&level=ad&date_preset=last_7d&limit=20&access_token=${TOKEN}`),
     ]);
 
@@ -154,7 +161,6 @@ export async function POST(
     // ── 5. Generate suggestions ──
     const suggestions: Suggestion[] = [];
 
-    // --- Age/Gender analysis ---
     if (ageGender.length > 0 && totalSpend > 0) {
       const sorted = [...ageGender].sort((a, b) => b.roas - a.roas);
       const best = sorted[0];
@@ -165,7 +171,7 @@ export async function POST(
         const worstConvPct = totalConversions > 0 ? (worst.conversions / totalConversions * 100) : 0;
         if (worstSpendPct > 20 && worstConvPct < 10) {
           suggestions.push({
-            icon: "⚠️",
+            icon: "\u26A0\uFE0F",
             type: "warning",
             title: `${worst.age} ${worst.gender} overspending`,
             detail: `Gets ${worstSpendPct.toFixed(0)}% of budget but only ${worstConvPct.toFixed(0)}% of conversions (ROAS ${worst.roas.toFixed(1)}x). Consider excluding or reducing bid for this segment.`,
@@ -177,7 +183,7 @@ export async function POST(
         const bestSpendPct = (best.spend / totalSpend * 100);
         if (bestSpendPct < 30 && best.roas > 2) {
           suggestions.push({
-            icon: "💰",
+            icon: "\uD83D\uDCB0",
             type: "opportunity",
             title: `${best.age} ${best.gender} is underfunded`,
             detail: `Delivers ${best.roas.toFixed(1)}x ROAS but only gets ${bestSpendPct.toFixed(0)}% of budget. Scale this segment for better returns.`,
@@ -186,7 +192,6 @@ export async function POST(
       }
     }
 
-    // --- Placement analysis ---
     if (placements.length > 0) {
       const placementsSorted = [...placements].filter((p: any) => p.spend > 0).sort((a: any, b: any) => b.roas - a.roas);
       if (placementsSorted.length >= 2) {
@@ -197,7 +202,7 @@ export async function POST(
         const bestPSpendPct = totalSpend > 0 ? (bestP.spend / totalSpend * 100).toFixed(0) : "?";
         const worstPSpendPct = totalSpend > 0 ? (worstP.spend / totalSpend * 100).toFixed(0) : "?";
         suggestions.push({
-          icon: "📊",
+          icon: "\uD83D\uDCCA",
           type: "info",
           title: "Placement performance gap",
           detail: `${bestLabel} delivers ${bestP.roas.toFixed(1)}x ROAS on ${bestPSpendPct}% of spend. ${worstLabel} delivers ${worstP.roas.toFixed(1)}x on ${worstPSpendPct}%. Shift budget from ${worstLabel} to ${bestLabel}.`,
@@ -205,7 +210,6 @@ export async function POST(
       }
     }
 
-    // --- Device analysis ---
     if (devices.length > 0) {
       const devicesWithSpend = devices.filter((d: any) => d.spend > 0);
       if (devicesWithSpend.length >= 2) {
@@ -216,7 +220,7 @@ export async function POST(
           ? `Shift budget toward ${bestDev.device} for better efficiency.`
           : `Device performance is relatively balanced.`;
         suggestions.push({
-          icon: "📱",
+          icon: "\uD83D\uDCF1",
           type: bestDev.roas > worstDev.roas * 1.5 ? "opportunity" : "info",
           title: "Device performance",
           detail: `${bestDev.device}: ${bestDev.roas.toFixed(1)}x ROAS, ${worstDev.device}: ${worstDev.roas.toFixed(1)}x ROAS. ${rec}`,
@@ -224,7 +228,6 @@ export async function POST(
       }
     }
 
-    // --- Daily trend analysis ---
     if (dailyTrend.length >= 3) {
       const firstHalf = dailyTrend.slice(0, Math.floor(dailyTrend.length / 2));
       const secondHalf = dailyTrend.slice(Math.floor(dailyTrend.length / 2));
@@ -234,16 +237,15 @@ export async function POST(
       const firstDay = dailyTrend[0];
       const lastDay = dailyTrend[dailyTrend.length - 1];
       const rec = trending === "down"
-        ? "Performance declining — review audience saturation and creative freshness."
-        : "Positive momentum — consider scaling budget while trend holds.";
+        ? "Performance declining \u2014 review audience saturation and creative freshness."
+        : "Positive momentum \u2014 consider scaling budget while trend holds.";
       suggestions.push({
-        icon: trending === "up" ? "📈" : "📉",
+        icon: trending === "up" ? "\uD83D\uDCC8" : "\uD83D\uDCC9",
         type: trending === "up" ? "success" : "warning",
         title: `ROAS trending ${trending}`,
-        detail: `7-day ROAS: ${firstDay.roas.toFixed(1)}x → ${lastDay.roas.toFixed(1)}x. ${rec}`,
+        detail: `7-day ROAS: ${firstDay.roas.toFixed(1)}x \u2192 ${lastDay.roas.toFixed(1)}x. ${rec}`,
       });
 
-      // CPA trend via daily spend/conversions
       const dailyConversions = dailyData.map((row: any) => ({
         spend: safe(row.spend),
         conv: extractPurchases(row.actions),
@@ -254,7 +256,7 @@ export async function POST(
       const avgCPASecond = secondHalfCPA.reduce((s: number, d: any) => s + (d.conv > 0 ? d.spend / d.conv : 0), 0) / secondHalfCPA.length;
       if (avgCPASecond > avgCPAFirst * 1.2 && avgCPAFirst > 0) {
         suggestions.push({
-          icon: "⚠️",
+          icon: "\u26A0\uFE0F",
           type: "warning",
           title: "CPA rising",
           detail: `CPA increased from ~${fmtINR(avgCPAFirst)} to ~${fmtINR(avgCPASecond)} over the last 7 days. Check for audience fatigue or increased competition.`,
@@ -262,38 +264,35 @@ export async function POST(
       }
     }
 
-    // --- Ad creative analysis ---
     if (activeAds.length === 0 && adsRaw.length > 0) {
       suggestions.push({
-        icon: "⚠️",
+        icon: "\u26A0\uFE0F",
         type: "warning",
         title: "No active ads",
         detail: `${adsRaw.length} ads exist but none are active. Campaign cannot deliver without active ads.`,
       });
     } else if (activeAds.length > 0 && activeAds.length < 3) {
       suggestions.push({
-        icon: "⚠️",
+        icon: "\u26A0\uFE0F",
         type: "warning",
         title: `Only ${activeAds.length} active ad${activeAds.length === 1 ? "" : "s"}`,
         detail: `Meta recommends 3-5 active ads per ad set for effective creative testing. Add more variants to improve optimization.`,
       });
     }
 
-    // Check for missing CTA
     for (const ad of activeAds.slice(0, 5)) {
       const creative = ad.creative;
       if (creative && !creative.call_to_action_type) {
         suggestions.push({
-          icon: "⚠️",
+          icon: "\u26A0\uFE0F",
           type: "warning",
           title: `"${(ad.name || "").slice(0, 40)}" has no CTA`,
           detail: `Adding a call-to-action button typically improves CTR by 15-20%. Consider adding SHOP_NOW or LEARN_MORE.`,
         });
-        break; // Only report first one
+        break;
       }
     }
 
-    // Creative concentration
     if (adLevelData.length >= 2) {
       const adTotalSpend = adLevelData.reduce((s: number, a: any) => s + safe(a.spend), 0);
       if (adTotalSpend > 0) {
@@ -301,7 +300,7 @@ export async function POST(
         const topAdPct = (safe(topAd.spend) / adTotalSpend) * 100;
         if (topAdPct > 80) {
           suggestions.push({
-            icon: "⚠️",
+            icon: "\u26A0\uFE0F",
             type: "warning",
             title: "Creative concentration risk",
             detail: `"${(topAd.ad_name || "").slice(0, 40)}" gets ${topAdPct.toFixed(0)}% of spend. Add more creative variants to reduce fatigue and let Meta optimize across multiple assets.`,
@@ -310,14 +309,12 @@ export async function POST(
       }
     }
 
-    // --- Targeting analysis ---
     if (adSetsRaw.length > 0) {
       const firstAdSet = adSetsRaw[0];
       const targeting = firstAdSet.targeting || {};
       const ageMin = targeting.age_min || 18;
       const ageMax = targeting.age_max || 65;
 
-      // Compare targeted age vs best performing age from breakdown
       if (ageGender.length > 0) {
         const bestAgeSegment = [...ageGender].sort((a, b) => {
           const cpA = a.conversions > 0 ? a.spend / a.conversions : Infinity;
@@ -327,7 +324,7 @@ export async function POST(
         if (bestAgeSegment && bestAgeSegment.conversions > 0) {
           const bestCPA = bestAgeSegment.spend / bestAgeSegment.conversions;
           suggestions.push({
-            icon: "🎯",
+            icon: "\uD83C\uDFAF",
             type: "info",
             title: "Targeting vs. performance data",
             detail: `Targeting ${ageMin}-${ageMax} age range. Your data shows ${bestAgeSegment.age} ${bestAgeSegment.gender} delivers lowest CPA at ${fmtINR(bestCPA)}. Account benchmark is ${fmtINR(BENCHMARKS.overall.avgCPA)}.`,
@@ -335,12 +332,11 @@ export async function POST(
         }
       }
 
-      // Interest vs lookalike suggestion
       const flexSpec = targeting.flexible_spec;
       const customAudiences = targeting.custom_audiences;
       if (flexSpec && flexSpec.length > 0 && (!customAudiences || customAudiences.length === 0)) {
         suggestions.push({
-          icon: "👥",
+          icon: "\uD83D\uDC65",
           type: "opportunity",
           title: "Test Lookalike audiences",
           detail: `Currently using interest targeting (avg ${BENCHMARKS.byType.interest.avgROAS}x ROAS in our data). Lookalike audiences deliver ${BENCHMARKS.byType.lookalike.avgROAS}x. Consider testing LAL based on purchasers.`,
@@ -348,31 +344,29 @@ export async function POST(
       }
     }
 
-    // --- Budget analysis ---
     if (overallCPA > 0) {
       const diff = ((overallCPA - BENCHMARKS.overall.avgCPA) / BENCHMARKS.overall.avgCPA) * 100;
       const direction = diff > 0 ? "above" : "below";
       suggestions.push({
-        icon: "💰",
+        icon: "\uD83D\uDCB0",
         type: diff > 20 ? "warning" : diff < -10 ? "success" : "info",
         title: `CPA vs account benchmark`,
         detail: `This campaign's CPA ${fmtINR(overallCPA)} is ${Math.abs(diff).toFixed(0)}% ${direction} account average ${fmtINR(BENCHMARKS.overall.avgCPA)}.`,
       });
     }
 
-    // --- Optimization goal check ---
     if (campaignObjective) {
       if ((campaignObjective.includes("TRAFFIC") || campaignObjective === "OUTCOME_TRAFFIC") && totalConversions > 0) {
         suggestions.push({
-          icon: "🔄",
+          icon: "\uD83D\uDD04",
           type: "opportunity",
           title: "Switch to Purchase optimization",
-          detail: `Optimizing for Traffic but getting ${totalConversions} purchases. Switch to Purchase/Conversion optimization for better ROAS — Meta will find higher-intent users.`,
+          detail: `Optimizing for Traffic but getting ${totalConversions} purchases. Switch to Purchase/Conversion optimization for better ROAS \u2014 Meta will find higher-intent users.`,
         });
       }
       if ((campaignObjective.includes("SALES") || campaignObjective === "OUTCOME_SALES") && totalConversions < 50 && daysRunning >= 7) {
         suggestions.push({
-          icon: "⚠️",
+          icon: "\u26A0\uFE0F",
           type: "warning",
           title: "Low conversion volume",
           detail: `Only ${totalConversions} conversions in 7 days. Meta needs ~50/week to exit learning phase. Consider broader targeting, higher budget, or optimizing for a higher-funnel event.`,
@@ -380,7 +374,6 @@ export async function POST(
       }
     }
 
-    // --- Flywheel insight ---
     if (totalSpend > 0) {
       const nameLower = campaignName.toLowerCase();
       let flywheelNote = "";
@@ -392,27 +385,21 @@ export async function POST(
         flywheelNote = `Account-wide benchmark: ${BENCHMARKS.overall.avgROAS}x ROAS, ${fmtINR(BENCHMARKS.overall.avgCPA)} CPA, ${BENCHMARKS.overall.avgCTR}% CTR.`;
       }
       suggestions.push({
-        icon: "🧠",
+        icon: "\uD83E\uDDE0",
         type: "info",
         title: "Flywheel benchmark",
         detail: flywheelNote,
       });
     }
 
-    // --- Frequency check (from daily data) ---
     if (dailyData.length > 0) {
-      const totalImpressions = dailyData.reduce((s: number, d: any) => s + safe(d.impressions), 0);
-      const totalReach = totalImpressions; // Approximate — reach not available in daily breakdown
-      // Use ad-level if available for frequency approximation
       if (adLevelData.length > 0) {
         const totalAdImpressions = adLevelData.reduce((s: number, a: any) => s + safe(a.impressions), 0);
         const totalAdClicks = adLevelData.reduce((s: number, a: any) => s + safe(a.clicks), 0);
-        // Rough frequency estimate: if CTR is very low and impressions very high relative to clicks
-        // We don't have reach directly, so skip true frequency. Instead check for signs of fatigue.
         const avgCTR = totalAdClicks > 0 && totalAdImpressions > 0 ? (totalAdClicks / totalAdImpressions * 100) : 0;
         if (avgCTR > 0 && avgCTR < 0.5 && totalAdImpressions > 100000) {
           suggestions.push({
-            icon: "⚠️",
+            icon: "\u26A0\uFE0F",
             type: "warning",
             title: "Possible audience fatigue",
             detail: `CTR is only ${avgCTR.toFixed(2)}% across ${(totalAdImpressions / 1000).toFixed(0)}K impressions. This often indicates high frequency / audience saturation. Expand audience or refresh creative.`,
@@ -421,16 +408,15 @@ export async function POST(
       }
     }
 
-    // Handle zero-spend campaigns
     if (totalSpend === 0 && suggestions.length === 0) {
       suggestions.push({
-        icon: "📊",
+        icon: "\uD83D\uDCCA",
         type: "info",
         title: "No spend data",
         detail: "No spend or impression data in the last 7 days. Campaign may be newly created, paused, or has no active ad sets with approved creatives.",
       });
       suggestions.push({
-        icon: "💡",
+        icon: "\uD83D\uDCA1",
         type: "info",
         title: "Check setup",
         detail: "Ensure ad sets have approved creatives and sufficient budget to begin delivery.",

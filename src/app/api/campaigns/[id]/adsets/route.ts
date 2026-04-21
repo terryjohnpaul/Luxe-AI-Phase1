@@ -2,15 +2,29 @@ import { NextResponse } from "next/server";
 
 const META_API = "https://graph.facebook.com/v25.0";
 
+function resolveToken(account: string) {
+  if (account === "luxeai") {
+    return {
+      token: process.env.META_ADS_ACCESS_TOKEN,
+      envName: "META_ADS_ACCESS_TOKEN",
+    };
+  }
+  return {
+    token: process.env.AJIO_LUXE_META_ACCESS_TOKEN,
+    envName: "AJIO_LUXE_META_ACCESS_TOKEN",
+  };
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: campaignId } = await params;
-  const token = process.env.AJIO_LUXE_META_ACCESS_TOKEN;
+  const account = new URL(request.url).searchParams.get("account") || "ajio";
+  const { token, envName } = resolveToken(account);
 
   if (!token) {
-    return NextResponse.json({ error: "AJIO_LUXE_META_ACCESS_TOKEN not set" }, { status: 500 });
+    return NextResponse.json({ error: `${envName} not set` }, { status: 500 });
   }
 
   try {

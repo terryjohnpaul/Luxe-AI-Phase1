@@ -55,11 +55,20 @@ interface Stats {
   paused: number;
   totalSpend: number;
   totalPages: number;
+  accountName?: string;
+  accountId?: string;
 }
 
 interface ApiResponse {
   campaigns: Campaign[];
   stats: Stats;
+}
+
+interface AccountInfo {
+  id: string;
+  name: string;
+  accountId: string;
+  platform: string;
 }
 
 interface EditFields {
@@ -143,8 +152,6 @@ const safe = (v: unknown): number => {
 };
 
 type SortKey = "spend" | "roas" | "conversions" | "cpa" | "ctr" | "impressions";
-
-const ACCOUNT_ID = "202330961584003";
 
 const BID_STRATEGIES = [
   { value: "LOWEST_COST_WITHOUT_CAP", label: "Lowest Cost" },
@@ -238,6 +245,10 @@ export default function CampaignsPage() {
   const [sortBy, setSortBy] = useState<SortKey>("spend");
   const [sortDir, setSortDir] = useState<"desc" | "asc">("desc");
 
+  // Account switcher
+  const [accounts, setAccounts] = useState<AccountInfo[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState("ajio");
+
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTab, setEditTab] = useState<"campaign" | "adsets" | "ads">("campaign");
@@ -264,11 +275,20 @@ export default function CampaignsPage() {
   const [analyzeLoading, setAnalyzeLoading] = useState<string | null>(null);
   const [analyzeResults, setAnalyzeResults] = useState<Record<string, any>>({});
 
+  // Fetch accounts on mount
+  useEffect(() => {
+    fetch("/api/campaigns/accounts", { headers: { Authorization: AUTH } })
+      .then((r) => r.json())
+      .then((d) => setAccounts(d.accounts || []))
+      .catch(() => {});
+  }, []);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
+        account: selectedAccount,
         page: String(page),
         limit: "50",
         status: statusFilter,
@@ -286,7 +306,7 @@ export default function CampaignsPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, page, sortBy, sortDir]);
+  }, [selectedAccount, statusFilter, search, page, sortBy, sortDir]);
 
   useEffect(() => {
     fetchData();
@@ -299,6 +319,19 @@ export default function CampaignsPage() {
     }, 400);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  // When account changes, clear state and reset page
+  const switchAccount = (accountId: string) => {
+    if (accountId === selectedAccount) return;
+    setSelectedAccount(accountId);
+    setData(null);
+    setPage(1);
+    setEditingId(null);
+    setAnalyzingId(null);
+    setAdSets({});
+    setAds({});
+    setAnalyzeResults({});
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortBy === key) {
@@ -348,7 +381,7 @@ export default function CampaignsPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
-      const body: Record<string, unknown> = {};
+      const body: Record<string, unknown> = { account: selectedAccount };
       if (fields.name) body.name = fields.name;
       if (fields.status) body.status = fields.status;
       if (fields.dailyBudget) body.dailyBudget = parseFloat(fields.dailyBudget);
@@ -385,7 +418,7 @@ export default function CampaignsPage() {
     if (adSets[campaignId]) return; // already loaded
     setAdSetsLoading(campaignId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/adsets`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/adsets?account=${selectedAccount}`, {
         headers: { Authorization: AUTH },
       });
       const data = await res.json();
@@ -479,6 +512,7 @@ export default function CampaignsPage() {
       Object.keys(targeting).forEach((k) => targeting[k] === undefined && delete targeting[k]);
 
       const body: any = {
+        account: selectedAccount,
         name: edits.name,
         status: edits.status,
         optimizationGoal: edits.optimizationGoal,
@@ -517,7 +551,7 @@ export default function CampaignsPage() {
     if (ads[campaignId]) return;
     setAdsLoading(campaignId);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/ads`, {
+      const res = await fetch(`/api/campaigns/${campaignId}/ads?account=${selectedAccount}`, {
         headers: { Authorization: AUTH },
       });
       const data = await res.json();
@@ -551,7 +585,7 @@ export default function CampaignsPage() {
       const res = await fetch(`/api/ads/${adId}/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: AUTH },
-        body: JSON.stringify({ name: edits.name, status: edits.status }),
+        body: JSON.stringify({ account: selectedAccount, name: edits.name, status: edits.status }),
       });
       const result = await res.json();
 
@@ -589,6 +623,7 @@ export default function CampaignsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: AUTH },
         body: JSON.stringify({
+          account: selectedAccount,
           name: c.name,
           status: c.status,
           spend: safe(c.metrics?.spend),
@@ -613,6 +648,7 @@ export default function CampaignsPage() {
 
   const stats = data?.stats;
   const campaigns = data?.campaigns || [];
+  const currentAccountId = accounts.find((a) => a.id === selectedAccount)?.accountId || stats?.accountId || "";
 
   return (
     <div className="min-h-screen bg-[#0B1120] p-6 lg:p-8">
@@ -621,7 +657,7 @@ export default function CampaignsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-100 mb-1">Campaigns</h1>
           <p className="text-sm text-gray-400">
-            {stats ? `${stats.total} campaigns from Meta Ads (live)` : "Loading..."}
+            {stats ? `${stats.total} campaigns from ${stats.accountName || "Meta Ads"} (live)` : "Loading..."}
           </p>
         </div>
         <button
@@ -633,6 +669,27 @@ export default function CampaignsPage() {
           Refresh
         </button>
       </div>
+
+      {/* Account Switcher */}
+      {accounts.length > 1 && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-gray-400">Account:</span>
+          {accounts.map((acc) => (
+            <button
+              key={acc.id}
+              onClick={() => switchAccount(acc.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                selectedAccount === acc.id
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-800/50 text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {acc.name}
+              <span className="text-[9px] ml-1 opacity-60">({acc.accountId})</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Stats Bar */}
       {stats && (
@@ -844,7 +901,7 @@ export default function CampaignsPage() {
                   AI Analyze
                 </button>
                 <a
-                  href={`https://www.facebook.com/adsmanager/manage/campaigns?act=${ACCOUNT_ID}&campaign_ids=${c.id}`}
+                  href={`https://www.facebook.com/adsmanager/manage/campaigns?act=${currentAccountId}&campaign_ids=${c.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs px-3 py-1.5 rounded bg-gray-700/50 text-gray-300 hover:bg-gray-600/50 flex items-center gap-1.5 ml-auto transition-colors"
@@ -854,7 +911,7 @@ export default function CampaignsPage() {
                 </a>
               </div>
 
-              {/* ═══ EDIT PANEL — 3-Tab Editor ═══ */}
+              {/* EDIT PANEL -- 3-Tab Editor */}
               {editingId === c.id && ed && (
                 <div className="bg-gray-800/30 border border-gray-700/30 rounded-lg p-4 mt-3">
                   {/* Tab Bar */}
@@ -878,10 +935,10 @@ export default function CampaignsPage() {
                     ))}
                   </div>
 
-                  {/* ═══ Campaign Tab ═══ */}
+                  {/* Campaign Tab */}
                   {editTab === "campaign" && (
                     <>
-                      {/* Campaign Name — full width */}
+                      {/* Campaign Name -- full width */}
                       <div className="mb-4">
                         <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Campaign Name</label>
                         <input
@@ -1010,7 +1067,7 @@ export default function CampaignsPage() {
                     </>
                   )}
 
-                  {/* ═══ Ad Sets Tab ═══ */}
+                  {/* Ad Sets Tab */}
                   {editTab === "adsets" && (
                     <div>
                       {adSetsLoading === c.id ? (
@@ -1113,7 +1170,7 @@ export default function CampaignsPage() {
                                   </div>
                                 </div>
 
-                                {/* Bid Amount — conditional */}
+                                {/* Bid Amount -- conditional */}
                                 {showBidAmount && (
                                   <div className="mb-3">
                                     <label className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-1 block">Bid Amount (INR)</label>
@@ -1127,7 +1184,7 @@ export default function CampaignsPage() {
                                   </div>
                                 )}
 
-                                {/* ── TARGETING ── */}
+                                {/* TARGETING */}
                                 <div className="border-t border-gray-700/30 pt-3 mt-3">
                                   <p className="text-[10px] text-gray-400 uppercase tracking-wide font-semibold mb-2">Targeting</p>
 
@@ -1329,7 +1386,7 @@ export default function CampaignsPage() {
                     </div>
                   )}
 
-                  {/* ═══ Ads Tab ═══ */}
+                  {/* Ads Tab */}
                   {editTab === "ads" && (
                     <div>
                       {adsLoading === c.id ? (

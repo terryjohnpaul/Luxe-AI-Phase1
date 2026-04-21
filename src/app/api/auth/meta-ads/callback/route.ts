@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import { db } from "@/lib/db";
+import crypto from "crypto";
 
 /**
  * GET /api/auth/meta-ads/callback
- * Exchanges code for short-lived token, then exchanges for long-lived token,
- * and saves it to .env.
+ * Exchanges code for long-lived token, fetches all ad accounts,
+ * and saves them to the ConnectedAccount table.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
 
     const shortLivedToken = tokenData.access_token;
 
-    // Step 2: Exchange short-lived token for long-lived token (60 days)
+    // Step 2: Exchange for long-lived token (60 days)
     const longLivedParams = new URLSearchParams({
       grant_type: "fb_exchange_token",
       client_id: appId,
@@ -65,54 +65,97 @@ export async function GET(request: Request) {
     const longLivedData = await longLivedRes.json();
 
     const accessToken = longLivedData.access_token || shortLivedToken;
-    const expiresIn = longLivedData.expires_in || "unknown";
+    const expiresIn = longLivedData.expires_in || 0;
+    const tokenExpiresAt = expiresIn > 0
+      ? new Date(Date.now() + expiresIn * 1000)
+      : null;
 
-    // Step 3: Verify token by fetching ad account info
-    const verifyRes = await fetch(
-      `https://graph.facebook.com/v25.0/act_${process.env.META_ADS_ACCOUNT_ID}?fields=name,account_status,currency&access_token=${accessToken}`
+    // Step 3: Fetch ALL ad accounts the user has access to
+    const adAccountsRes = await fetch(
+      `https://graph.facebook.com/v25.0/me/adaccounts?fields=id,name,account_status,currency,business_name&limit=100&access_token=${accessToken}`
     );
-    const verifyData = await verifyRes.json();
+    const adAccountsData = await adAccountsRes.json();
 
-    // Step 4: Save token to .env
-    const envPath = path.resolve(process.cwd(), ".env");
-    let envContent = await fs.readFile(envPath, "utf-8");
-
-    if (envContent.includes("META_ADS_ACCESS_TOKEN=")) {
-      envContent = envContent.replace(
-        /META_ADS_ACCESS_TOKEN=.*/,
-        `META_ADS_ACCESS_TOKEN=${accessToken}`
-      );
-    } else {
-      envContent += `\nMETA_ADS_ACCESS_TOKEN=${accessToken}\n`;
+    if (!adAccountsRes.ok || adAccountsData.error) {
+      return NextResponse.json({
+        error: "Failed to fetch ad accounts",
+        details: adAccountsData.error || adAccountsData,
+      }, { status: 400 });
     }
 
-    await fs.writeFile(envPath, envContent);
+    const adAccounts = adAccountsData.data || [];
+    const connectedAccounts: Array<{ id: string; name: string; accountId: string; currency: string }> = [];
 
-    // Return success page
-    const accountName = verifyData.name || "Unknown";
-    const currency = verifyData.currency || "N/A";
+    // Step 4: Upsert each ad account into the DB
+    for (const acc of adAccounts) {
+      // Meta returns id as "act_123456" — strip the "act_" prefix for accountId
+      const accountId = acc.id.replace("act_", "");
+      const accountName = acc.name || acc.business_name || `Ad Account ${accountId}`;
+      const currency = acc.currency || "INR";
+      const dbId = `acc_meta_${accountId}`;
+
+      // Skip disabled/unsettled accounts
+      if (acc.account_status === 3 || acc.account_status === 101) continue;
+
+      try {
+        await db.$executeRaw`
+          INSERT INTO "ConnectedAccount" (id, platform, "accountId", "accountName", "accessToken", "tokenExpiresAt", currency, status, permissions, "connectedAt", "lastUsedAt")
+          VALUES (${dbId}, 'META', ${accountId}, ${accountName}, ${accessToken}, ${tokenExpiresAt}, ${currency}, 'active', ARRAY['ads_read', 'ads_management', 'insights'], NOW(), NOW())
+          ON CONFLICT (platform, "accountId") DO UPDATE SET
+            "accessToken" = ${accessToken},
+            "accountName" = ${accountName},
+            "tokenExpiresAt" = ${tokenExpiresAt},
+            status = 'active',
+            "connectedAt" = NOW(),
+            "lastUsedAt" = NOW()
+        `;
+        connectedAccounts.push({ id: dbId, name: accountName, accountId, currency });
+      } catch (dbErr: any) {
+        console.error(`[Meta OAuth] Failed to save account ${accountId}:`, dbErr.message);
+      }
+    }
+
+    // Step 5: Return success page showing all connected accounts
+    const accountListHtml = connectedAccounts.length > 0
+      ? connectedAccounts.map(a =>
+          `<div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#111;border-radius:8px;margin-bottom:6px;">
+            <span style="color:#22c55e;font-size:18px;">&#10003;</span>
+            <div>
+              <p style="font-size:14px;margin:0;">${a.name}</p>
+              <p style="font-size:11px;color:#888;margin:2px 0 0;">ID: ${a.accountId} &middot; ${a.currency}</p>
+            </div>
+          </div>`
+        ).join("")
+      : `<p style="color:#ef4444;">No accessible ad accounts found. Make sure your Facebook account has ad account access.</p>`;
+
+    const expiryText = expiresIn > 0
+      ? `Token expires in ${Math.round(expiresIn / 86400)} days`
+      : "Token expiry unknown";
 
     return new NextResponse(
       `<!DOCTYPE html>
       <html>
-      <head><title>Meta Ads Connected</title></head>
-      <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #0a0a0a; color: #fff;">
-        <div style="text-align: center; max-width: 500px;">
-          <div style="font-size: 48px; margin-bottom: 16px;">&#10003;</div>
-          <h1 style="font-size: 24px; margin-bottom: 8px;">Meta Ads Connected!</h1>
-          <p style="color: #888; margin-bottom: 16px;">Long-lived token saved (expires in ${Math.round(Number(expiresIn) / 86400)} days).</p>
-          <div style="background: #1a1a1a; padding: 16px; border-radius: 8px; text-align: left; margin-bottom: 24px;">
-            <p style="font-size: 12px; color: #888; margin: 4px 0;">Account: <span style="color: #fff;">${accountName}</span></p>
-            <p style="font-size: 12px; color: #888; margin: 4px 0;">Currency: <span style="color: #fff;">${currency}</span></p>
-            <p style="font-size: 12px; color: #888; margin: 4px 0;">Token: <span style="color: #555;">${accessToken.substring(0, 20)}...</span></p>
+      <head><title>Meta Ads Connected</title><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+      <body style="font-family:system-ui,-apple-system,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#0a0a0a;color:#fff;">
+        <div style="max-width:480px;width:100%;padding:24px;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="width:56px;height:56px;background:#22c55e20;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:28px;color:#22c55e;">&#10003;</div>
+            <h1 style="font-size:22px;margin:0 0 4px;">Meta Ads Connected!</h1>
+            <p style="color:#888;font-size:13px;margin:0;">Found ${connectedAccounts.length} ad account${connectedAccounts.length !== 1 ? 's' : ''} &middot; ${expiryText}</p>
           </div>
-          <a href="/dashboard/settings" style="display: inline-block; padding: 10px 24px; background: #3b82f6; color: white; border-radius: 8px; text-decoration: none;">Go to Settings</a>
+          <div style="margin-bottom:24px;">
+            ${accountListHtml}
+          </div>
+          <a href="/dashboard/settings?connected=meta&accounts=${connectedAccounts.length}" style="display:block;text-align:center;padding:12px;background:#3b82f6;color:white;border-radius:10px;text-decoration:none;font-weight:500;font-size:14px;">
+            Go to Settings
+          </a>
         </div>
       </body>
       </html>`,
       { headers: { "Content-Type": "text/html" } }
     );
   } catch (err: any) {
-    return NextResponse.json({ error: "Failed to exchange token", details: err.message }, { status: 500 });
+    console.error("[Meta OAuth] Callback error:", err.message);
+    return NextResponse.json({ error: "Failed to complete OAuth", details: err.message }, { status: 500 });
   }
 }
