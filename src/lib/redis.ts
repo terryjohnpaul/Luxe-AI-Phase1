@@ -4,11 +4,19 @@ const globalForRedis = globalThis as unknown as {
   redis: Redis | undefined;
 };
 
-export const redis =
-  globalForRedis.redis ??
-  new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
+function createRedis(): Redis {
+  try {
+    const url = process.env.REDIS_URL;
+    if (!url) {
+      // Return a dummy redis that won't crash on missing connection
+      return new Redis({ lazyConnect: true, maxRetriesPerRequest: null, enableReadyCheck: false });
+    }
+    return new Redis(url, { maxRetriesPerRequest: null, enableReadyCheck: false });
+  } catch {
+    return new Redis({ lazyConnect: true, maxRetriesPerRequest: null, enableReadyCheck: false });
+  }
+}
+
+export const redis = globalForRedis.redis ?? createRedis();
 
 if (process.env.NODE_ENV !== "production") globalForRedis.redis = redis;

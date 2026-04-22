@@ -10,12 +10,19 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createClient() {
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  const adapter = new PrismaPg(pool);
-  return new (PrismaClient as any)({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
+  try {
+    if (!process.env.DATABASE_URL) {
+      return null;
+    }
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    const adapter = new PrismaPg(pool);
+    return new (PrismaClient as any)({
+      adapter,
+      log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    });
+  } catch {
+    return null;
+  }
 }
 
 export const db: any = globalForPrisma.prisma ?? createClient();
