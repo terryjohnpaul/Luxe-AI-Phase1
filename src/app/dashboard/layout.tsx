@@ -37,6 +37,7 @@ const navigation = [
     label: "CORE",
     items: [
       { name: "Command Center", href: "/dashboard/command-center", icon: LayoutDashboard },
+      { name: "Intelligence", href: "/dashboard/intelligence", icon: Radio, highlight: true },
       { name: "Flywheel", href: "/dashboard/flywheel", icon: Brain },
       { name: "Optimization Engine", href: "/dashboard/optimization", icon: Zap },
       { name: "Campaign Approval", href: "/dashboard/approval", icon: ClipboardCheck },
@@ -122,6 +123,7 @@ export default function DashboardLayout({
               {group.items.map((item) => {
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
                 const Icon = item.icon;
+                const isHighlighted = 'highlight' in item && item.highlight;
                 return (
                   <Link
                     key={item.href}
@@ -130,11 +132,13 @@ export default function DashboardLayout({
                       "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors mb-0.5",
                       isActive
                         ? "bg-brand-blue/20 text-brand-blue font-medium"
+                        : isHighlighted
+                        ? "text-blue-300 hover:text-blue-200 hover:bg-blue-500/10"
                         : "text-white/60 hover:text-white hover:bg-white/5"
                     )}
                     title={collapsed ? item.name : undefined}
                   >
-                    <Icon size={18} className="shrink-0" />
+                    <Icon size={18} className={cn("shrink-0", isHighlighted && !isActive && "text-blue-400")} />
                     {!collapsed && <span>{item.name}</span>}
                   </Link>
                 );
