@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import Link from "next/link";
 import {
   Radio, MapPin, Clock, Loader2,
   ThermometerSun, Trophy, Heart, PartyPopper,
@@ -398,14 +399,22 @@ export default function IntelligencePage() {
                           <span className="text-xs text-muted italic">{signal.triggersWhat}</span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {signal.suggestedBrands.map((b) => (
-                          <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
-                        ))}
-                        <span className="text-xs text-muted">{signal.location}</span>
-                        {signal.targetArchetypes.length > 0 && (
-                          <span className="text-xs text-muted">· {signal.targetArchetypes.join(", ")}</span>
-                        )}
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {signal.suggestedBrands.map((b) => (
+                            <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
+                          ))}
+                          <span className="text-xs text-muted">{signal.location}</span>
+                          {signal.targetArchetypes.length > 0 && (
+                            <span className="text-xs text-muted">· {signal.targetArchetypes.join(", ")}</span>
+                          )}
+                        </div>
+                        <Link
+                          href="/dashboard/command-center"
+                          className="inline-flex items-center gap-1 px-4 py-1 rounded-full text-xs font-medium border border-brand-blue text-brand-blue hover:bg-brand-blue hover:text-white transition-colors"
+                        >
+                          Take Action →
+                        </Link>
                       </div>
                     </div>
                   );
