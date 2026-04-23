@@ -352,79 +352,60 @@ export default function IntelligencePage() {
                   const expiry = expiresIn(signal.expiresAt);
                   const metrics = parseMetrics(signal.data as Record<string, unknown> | undefined);
                   return (
-                    <div className="px-4 pb-4 pt-2 border-t border-card-border panel-expand">
-                      <div className="grid grid-cols-[1fr_1fr] gap-8">
-                        {/* Left: Signal details */}
-                        <div className="space-y-2">
-                          {/* Metadata line */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs bg-surface px-2 py-0.5 rounded font-medium">{TYPE_LABELS[signal.type] || signal.type}</span>
-                            <span className={cn("text-xs px-2 py-0.5 rounded font-medium", signal.signalCategory === "internal" ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600")}>
-                              {signal.signalCategory === "internal" ? "Internal" : "External"}
-                            </span>
-                            <span className="text-xs text-muted">{Math.round(signal.confidence * 100)}% confidence</span>
-                          </div>
+                    <div className="px-4 pb-4 pt-2 border-t border-card-border panel-expand space-y-2">
+                      {/* Row 1: Metadata — type, category, confidence, source, expiry */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs bg-surface px-2 py-0.5 rounded font-medium">{TYPE_LABELS[signal.type] || signal.type}</span>
+                        <span className={cn("text-xs px-2 py-0.5 rounded font-medium", signal.signalCategory === "internal" ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600")}>
+                          {signal.signalCategory === "internal" ? "Internal" : "External"}
+                        </span>
+                        <span className="text-xs text-muted">{Math.round(signal.confidence * 100)}% confidence</span>
+                        <span className="text-muted">·</span>
+                        {signal.dataSource && (
+                          signal.sourceUrl ? (
+                            <a href={signal.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-blue hover:underline">{signal.dataSource} ↗</a>
+                          ) : (
+                            <span className="text-xs text-muted">{signal.dataSource}</span>
+                          )
+                        )}
+                        <span className={cn("text-xs font-medium", expiry.urgent ? "text-red-500" : expiry.warning ? "text-amber-500" : "text-muted")}>{expiry.text}</span>
+                      </div>
 
-                          {/* Source + Expiry */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {signal.dataSource && (
-                              signal.sourceUrl ? (
-                                <a href={signal.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-blue hover:underline">
-                                  {signal.dataSource} ↗
-                                </a>
-                              ) : (
-                                <span className="text-xs text-muted">{signal.dataSource}</span>
-                              )
-                            )}
-                            <span className={cn("text-xs font-medium", expiry.urgent ? "text-red-500" : expiry.warning ? "text-amber-500" : "text-muted")}>
-                              {expiry.text}
-                            </span>
-                          </div>
+                      {/* Row 2: Description */}
+                      <p className="text-xs leading-relaxed">{signal.description}</p>
 
-                          {/* Description */}
-                          <p className="text-xs leading-relaxed">{signal.description}</p>
-
-                          {/* Key Metrics */}
-                          {metrics.length > 0 && (
-                            <div className="border border-card-border rounded-lg p-2">
-                              <p className="text-xs font-medium text-muted mb-1">KEY METRICS</p>
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                {metrics.map((m) => (
-                                  <div key={m.label} className="flex items-center justify-between">
-                                    <span className="text-xs text-muted">{m.label}</span>
-                                    <span className="text-xs font-semibold">{m.value}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Brands + Location + Audience */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {signal.suggestedBrands.map((b) => (
-                              <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
+                      {/* Row 3: Key Metrics + Action side by side */}
+                      <div className="flex gap-4">
+                        {/* Metrics (inline) */}
+                        {metrics.length > 0 && (
+                          <div className="flex items-center gap-4 flex-wrap">
+                            {metrics.map((m) => (
+                              <span key={m.label} className="text-xs"><span className="text-muted">{m.label}: </span><span className="font-semibold">{m.value}</span></span>
                             ))}
-                            <span className="text-xs text-muted">{signal.location}</span>
-                            {signal.targetArchetypes.length > 0 && (
-                              <span className="text-xs text-muted">· {signal.targetArchetypes.join(", ")}</span>
-                            )}
                           </div>
-                        </div>
+                        )}
+                      </div>
 
-                        {/* Right: Action + Impact */}
-                        <div className="space-y-2">
-                          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-4">
-                            <p className="text-xs font-medium text-green-800 mb-1">RECOMMENDED ACTION</p>
-                            <p className="text-xs text-green-700 leading-relaxed">{signal.suggestedAction}</p>
-                          </div>
+                      {/* Row 4: Action */}
+                      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
+                        <span className="text-xs font-medium text-green-800">Action: </span>
+                        <span className="text-xs text-green-700">{signal.suggestedAction}</span>
+                      </div>
 
-                          {signal.triggersWhat && (
-                            <div className="border border-card-border rounded-lg px-4 py-4">
-                              <p className="text-xs font-medium text-muted mb-1">IMPACT</p>
-                              <p className="text-xs leading-relaxed">{signal.triggersWhat}</p>
-                            </div>
-                          )}
-                        </div>
+                      {/* Row 5: Impact + Brands + Location */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {signal.triggersWhat && (
+                          <span className="text-xs text-muted italic">{signal.triggersWhat}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {signal.suggestedBrands.map((b) => (
+                          <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
+                        ))}
+                        <span className="text-xs text-muted">{signal.location}</span>
+                        {signal.targetArchetypes.length > 0 && (
+                          <span className="text-xs text-muted">· {signal.targetArchetypes.join(", ")}</span>
+                        )}
                       </div>
                     </div>
                   );
