@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Radio, MapPin, Clock, Loader2,
   ThermometerSun, Trophy, Heart, PartyPopper,
@@ -109,7 +109,7 @@ export default function IntelligencePage() {
   const [data, setData] = useState<ApiResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [severityFilter, setSeverityFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -147,26 +147,17 @@ export default function IntelligencePage() {
     if (!data) return [];
     return data.signals.filter((s) => {
       if (severityFilter !== "all" && s.severity !== severityFilter) return false;
-      if (categoryFilter === "all") return true;
-      if (categoryFilter === "external") return s.signalCategory === "external";
-      if (categoryFilter === "internal") return s.signalCategory === "internal";
-      return s.type === categoryFilter;
+      if (selectedTypes.size > 0 && !selectedTypes.has(s.type)) return false;
+      return true;
     });
-  }, [data, severityFilter, categoryFilter]);
+  }, [data, severityFilter, selectedTypes]);
 
-  // Category tabs — All + External + Internal + each signal type
-  const categoryTabs = useMemo(() => {
-    if (!data) return [{ key: "all", label: "All", count: 0 }];
-    const tabs = [
-      { key: "all", label: "All", count: data.signals.length },
-      { key: "external", label: "External", count: data.signals.filter((s) => s.signalCategory === "external").length },
-      { key: "internal", label: "Internal", count: data.signals.filter((s) => s.signalCategory === "internal").length },
-    ];
-    const sorted = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
-    sorted.forEach(([type, count]) => {
-      tabs.push({ key: type, label: TYPE_LABELS[type] || type, count });
-    });
-    return tabs;
+  // Signal type options sorted by count
+  const typeOptions = useMemo(() => {
+    if (!data) return [];
+    return Object.entries(categoryCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, count]) => ({ key: type, label: TYPE_LABELS[type] || type, count }));
   }, [data, categoryCounts]);
 
   if (loading) {
@@ -232,26 +223,27 @@ export default function IntelligencePage() {
           })}
         </div>
 
-        {/* Signal Type */}
-        <p className="text-xs text-muted font-medium mb-1">Signal Type</p>
-        <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-card-border">
-          {categoryTabs.filter((t) => t.key !== "all" && t.key !== "external" && t.key !== "internal").map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setCategoryFilter(categoryFilter === tab.key ? "all" : tab.key)}
-              disabled={tab.count === 0}
-              className={cn(
-                "px-4 py-1 rounded-full text-xs font-medium transition-colors border",
-                categoryFilter === tab.key
-                  ? "bg-brand-blue text-white border-brand-blue"
-                  : tab.count === 0
-                    ? "text-muted/40 border-card-border cursor-default"
-                    : "text-muted border-card-border hover:border-muted hover:text-text"
-              )}
-            >
-              {tab.label} ({tab.count})
-            </button>
-          ))}
+        {/* Signal Type dropdown */}
+        <div className="flex items-center gap-4 mb-4 pb-4 border-b border-card-border">
+          <SignalTypeDropdown
+            options={typeOptions}
+            selected={selectedTypes}
+            onChange={setSelectedTypes}
+          />
+          {selectedTypes.size > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {Array.from(selectedTypes).map((type) => (
+                <span key={type} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue">
+                  {TYPE_LABELS[type] || type}
+                  <button
+                    onClick={() => setSelectedTypes((prev) => { const n = new Set(prev); n.delete(type); return n; })}
+                    className="hover:text-red-500"
+                    aria-label={`Remove ${TYPE_LABELS[type] || type} filter`}
+                  >×</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Signal rows — compact, expandable */}
@@ -379,6 +371,98 @@ export default function IntelligencePage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// SIGNAL TYPE DROPDOWN (multi-select with checkboxes)
+// ============================================================
+
+function SignalTypeDropdown({
+  options,
+  selected,
+  onChange,
+}: {
+  options: { key: string; label: string; count: number }[];
+  selected: Set<string>;
+  onChange: (s: Set<string>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [open]);
+
+  const toggle = (key: string) => {
+    const next = new Set(selected);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onChange(next);
+  };
+
+  const selectAll = () => onChange(new Set(options.map((o) => o.key)));
+  const clearAll = () => onChange(new Set());
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className={cn(
+          "flex items-center gap-2 px-4 py-1 rounded-full text-xs font-medium border transition-colors",
+          selected.size > 0
+            ? "bg-brand-blue text-white border-brand-blue"
+            : "text-muted border-card-border hover:border-muted hover:text-text"
+        )}
+        aria-expanded={open}
+        aria-haspopup="true"
+      >
+        <Radio size={12} />
+        Signal Type {selected.size > 0 && `(${selected.size} selected)`}
+        <ChevronDown size={12} className={cn("transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-1 w-64 bg-card border border-card-border rounded-lg shadow-xl z-50 dropdown-enter">
+          {/* Select All / Clear */}
+          <div className="flex items-center justify-between px-4 py-2 border-b border-card-border">
+            <button onClick={selectAll} className="text-xs text-brand-blue hover:underline font-medium">Select All</button>
+            <button onClick={clearAll} className="text-xs text-muted hover:text-red-500 font-medium">Clear</button>
+          </div>
+
+          {/* Options */}
+          <div className="max-h-64 overflow-y-auto py-1">
+            {options.map((opt) => (
+              <label
+                key={opt.key}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-surface cursor-pointer transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(opt.key)}
+                  onChange={() => toggle(opt.key)}
+                  className="rounded border-card-border text-brand-blue focus:ring-brand-blue"
+                />
+                <span className="text-xs flex-1">{opt.label}</span>
+                <span className="text-xs text-muted tabular-nums">{opt.count}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
