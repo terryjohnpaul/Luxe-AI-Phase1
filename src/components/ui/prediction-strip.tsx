@@ -79,7 +79,7 @@ export function PredictionStrip({ prediction, className }: PredictionStripProps)
           label="CPA"
           value={prediction.estimatedCPA}
         />
-        <Metric
+        <MetricEmphasized
           icon={TrendingUp}
           iconColor="text-green-600"
           label="Revenue"
