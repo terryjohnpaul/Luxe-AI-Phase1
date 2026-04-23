@@ -290,7 +290,14 @@ export function AdRecommendationCard({
 
       {/* Title + Description */}
       <h3 className="font-semibold text-sm">{rec.title}</h3>
-      <p className="text-xs text-muted mt-1">{rec.description}</p>
+      {rec.description.includes("WHY THIS SIGNAL:") ? (
+        <div className="text-xs text-muted mt-1">
+          <p>{rec.description.split("WHY THIS SIGNAL:")[0].trim()}</p>
+          <p className="mt-1 text-brand-blue font-medium">WHY THIS SIGNAL: <span className="text-muted font-normal">{rec.description.split("WHY THIS SIGNAL:")[1].trim()}</span></p>
+        </div>
+      ) : (
+        <p className="text-xs text-muted mt-1">{rec.description}</p>
+      )}
 
       {/* ── Signal Intelligence ── */}
       {signalSource?.title && (
