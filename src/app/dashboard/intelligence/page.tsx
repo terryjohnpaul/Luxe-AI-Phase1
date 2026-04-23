@@ -159,8 +159,8 @@ export default function IntelligencePage() {
     if (!data) return [{ key: "all", label: "All", count: 0 }];
     const tabs = [
       { key: "all", label: "All", count: data.signals.length },
-      { key: "external", label: "External", count: data.externalCount || 0 },
-      { key: "internal", label: "Internal", count: data.internalCount || 0 },
+      { key: "external", label: "External", count: data.signals.filter((s) => s.signalCategory === "external").length },
+      { key: "internal", label: "Internal", count: data.signals.filter((s) => s.signalCategory === "internal").length },
     ];
     const sorted = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
     sorted.forEach(([type, count]) => {
@@ -202,7 +202,7 @@ export default function IntelligencePage() {
               <span className="text-xs font-medium text-muted">LIVE · Updated {timeAgo(data.fetchedAt)}</span>
             </div>
             <h1 className="text-3xl font-bold">Intelligence Feed</h1>
-            <p className="text-xs text-muted mt-1">AI-powered signal intelligence across all sources</p>
+            <p className="text-xs text-muted mt-1">{data.signals.length} signals from {Object.keys(data.sources).length} sources</p>
           </div>
         </div>
 
@@ -247,7 +247,7 @@ export default function IntelligencePage() {
                     : "text-muted border-card-border hover:border-muted hover:text-text"
               )}
             >
-              {tab.label}{tab.key === "all" || tab.key === "external" || tab.key === "internal" ? ` (${tab.count})` : ""}
+              {tab.label} ({tab.count})
             </button>
           ))}
         </div>
