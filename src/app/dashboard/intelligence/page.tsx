@@ -197,35 +197,34 @@ export default function IntelligencePage() {
           </div>
         </div>
 
-        {/* Severity */}
-        <p className="text-xs text-muted font-medium mb-1">Severity</p>
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          {(["all", "critical", "high", "medium", "low"] as const).map((sev) => {
-            const count = severityCounts[sev];
-            const label = sev === "all" ? "All" : sev.charAt(0).toUpperCase() + sev.slice(1);
-            return (
-              <button
-                key={sev}
-                onClick={() => setSeverityFilter(sev)}
-                disabled={count === 0 && sev !== "all"}
-                className={cn(
-                  "px-4 py-1 rounded-full text-xs font-medium transition-colors border",
-                  severityFilter === sev
-                    ? "bg-navy text-white border-navy"
-                    : count === 0 && sev !== "all"
-                      ? "text-muted/40 border-card-border cursor-default"
-                      : "text-muted border-card-border hover:border-muted hover:text-text"
-                )}
-              >
-                {label} ({count})
-              </button>
-            );
-          })}
-        </div>
+        {/* Severity + Signal Type dropdown on same row */}
+        <div className="flex items-center justify-between mb-4 pb-4 border-b border-card-border">
+          <div className="flex flex-wrap items-center gap-2">
+            {(["all", "critical", "high", "medium", "low"] as const).map((sev) => {
+              const count = severityCounts[sev];
+              const label = sev === "all" ? "All" : sev.charAt(0).toUpperCase() + sev.slice(1);
+              return (
+                <button
+                  key={sev}
+                  onClick={() => setSeverityFilter(sev)}
+                  disabled={count === 0 && sev !== "all"}
+                  className={cn(
+                    "px-4 py-1 rounded-full text-xs font-medium transition-colors border",
+                    severityFilter === sev
+                      ? "bg-navy text-white border-navy"
+                      : count === 0 && sev !== "all"
+                        ? "text-muted/40 border-card-border cursor-default"
+                        : "text-muted border-card-border hover:border-muted hover:text-text"
+                  )}
+                >
+                  {label} ({count})
+                </button>
+              );
+            })}
+          </div>
 
-        {/* Signal Type dropdown */}
-        <div className="flex items-center gap-4 mb-4 pb-4 border-b border-card-border">
-          <SignalTypeDropdown
+          <div className="flex items-center gap-4">
+            <SignalTypeDropdown
             options={typeOptions}
             selected={selectedTypes}
             onChange={setSelectedTypes}
@@ -243,7 +242,8 @@ export default function IntelligencePage() {
                 </span>
               ))}
             </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Signal rows — compact, expandable */}
@@ -436,7 +436,7 @@ function SignalTypeDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 w-64 bg-card border border-card-border rounded-lg shadow-xl z-50 dropdown-enter">
+        <div className="absolute right-0 top-full mt-1 w-64 bg-card border border-card-border rounded-lg shadow-xl z-50 dropdown-enter">
           {/* Select All / Clear */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-card-border">
             <button onClick={selectAll} className="text-xs text-brand-blue hover:underline font-medium">Select All</button>
