@@ -347,20 +347,48 @@ export default function IntelligencePage() {
           )}
         </div>
 
-        {/* Row 2: Signal Pulse + Trend + Category Insight — 3 stat cards */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          {/* Signal Pulse */}
+        {/* Row 2: Signal Heatmap + Trend + Category Insight */}
+        <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 mb-4">
+          {/* Signal Heatmap / Pulse */}
           <div className="bg-card border border-card-border rounded-lg p-4">
-            <p className="text-xs font-medium text-muted mb-1">SIGNAL PULSE</p>
-            <p className="text-sm font-bold">{signalPulse.count} high-severity signals</p>
-            <p className="text-xs text-muted mt-1">
-              {signalPulse.stacking
-                ? `${signalPulse.activeTypes.length} types converging — ${signalPulse.activeTypes.slice(0, 3).join(", ")}`
-                : `${signalPulse.activeTypes.length} active types`}
-            </p>
-            {signalPulse.stacking && (
-              <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">Stacking Active</span>
-            )}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-muted">SIGNAL HEATMAP</p>
+              {signalPulse.stacking && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium animate-pulse">Stacking Active</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {typeOptions.map((opt) => {
+                const maxCount = typeOptions[0]?.count || 1;
+                const intensity = opt.count / maxCount;
+                const highSevCount = data.signals.filter((s) => s.type === opt.key && (s.severity === "critical" || s.severity === "high")).length;
+                const hasHighSev = highSevCount > 0;
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => setSelectedTypes((prev) => {
+                      const n = new Set(prev);
+                      if (n.has(opt.key)) n.delete(opt.key); else n.add(opt.key);
+                      if (n.size >= typeOptions.length) return new Set();
+                      return n;
+                    })}
+                    className={cn(
+                      "px-2 py-1 rounded text-xs font-medium transition-all",
+                      selectedTypes.has(opt.key) && "ring-2 ring-brand-blue",
+                      intensity >= 0.7 ? "bg-red-100 text-red-800" :
+                      intensity >= 0.4 ? "bg-orange-100 text-orange-800" :
+                      intensity >= 0.2 ? "bg-amber-50 text-amber-800" :
+                      "bg-gray-50 text-gray-600"
+                    )}
+                    title={`${opt.label}: ${opt.count} signals (${highSevCount} high-severity)`}
+                  >
+                    {opt.label}
+                    <span className="ml-1 opacity-70">{opt.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted mt-2">{signalPulse.count} high-severity across {signalPulse.activeTypes.length} types</p>
           </div>
 
           {/* Signal Trend */}
@@ -368,12 +396,13 @@ export default function IntelligencePage() {
             <div className="bg-card border border-card-border rounded-lg p-4">
               <p className="text-xs font-medium text-muted mb-1">SIGNAL TREND</p>
               <div className="flex items-baseline gap-2">
-                <p className="text-sm font-bold">{signalTrend.current} critical+high</p>
+                <p className="text-sm font-bold">{signalTrend.current}</p>
                 <span className={cn("text-xs font-medium", signalTrend.up ? "text-green-600" : "text-red-500")}>
-                  {signalTrend.up ? "↑" : "↓"} {Math.abs(signalTrend.pct)}% vs baseline
+                  {signalTrend.up ? "↑" : "↓"} {Math.abs(signalTrend.pct)}%
                 </span>
               </div>
-              <p className="text-xs text-muted mt-1">{signalTrend.newCritical} critical signals active now</p>
+              <p className="text-xs text-muted mt-1">critical + high signals</p>
+              <p className="text-xs text-muted">{signalTrend.newCritical} critical active now</p>
             </div>
           )}
 
@@ -381,11 +410,9 @@ export default function IntelligencePage() {
           {categoryInsight && (
             <div className="bg-card border border-card-border rounded-lg p-4">
               <p className="text-xs font-medium text-muted mb-1">CATEGORY INSIGHT</p>
-              <p className="text-sm font-bold">{categoryInsight.topType} dominates</p>
-              <p className="text-xs text-muted mt-1">
-                {categoryInsight.topCount} signals ({categoryInsight.topPct}%) · {categoryInsight.internalPct}% from ad spend data
-              </p>
-              <p className="text-xs text-muted">{categoryInsight.totalTypes} signal types active</p>
+              <p className="text-sm font-bold">{categoryInsight.topType}</p>
+              <p className="text-xs text-muted mt-1">{categoryInsight.topCount} signals ({categoryInsight.topPct}%)</p>
+              <p className="text-xs text-muted">{categoryInsight.internalPct}% from ad spend data</p>
             </div>
           )}
         </div>
