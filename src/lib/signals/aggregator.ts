@@ -62,6 +62,16 @@ import { getcrossplatformorchestratorSignals } from "./cross-platform-orchestrat
 
 
 
+// Fast-fail timeout wrapper — external APIs that don't respond in 2s get skipped
+function withTimeout<T>(promise: Promise<T>, ms: number = 2000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 // Severity ranking for sorting
 const SEVERITY_RANK: Record<string, number> = {
   critical: 0,
@@ -83,33 +93,32 @@ export async function getAllSignals(): Promise<Signal[]> {
     Promise.resolve(getTravelEventSignals()),
     Promise.resolve(getGiftOccasionSignals()),     // NEW: gift occasions (Valentine's, Rakhi, Diwali gifting)
     Promise.resolve(getSaleEventSignals()),          // NEW: Ajio Luxe sale events (EOSS, brand sales)
-    getCelebritySignals(),                           // async — tries NewsAPI, falls back to curated
+    withTimeout(getCelebritySignals()),                // async — tries NewsAPI, falls back to curated
 
-    // API-based signals
-    getWeatherSignals(),
-    getCricketSignals(),                             // filtered: IPL + India matches only
-    // getNewsCelebritySignals() — REMOVED: duplicates getCelebritySignals() above (both use NewsAPI)
+    // API-based signals (2s timeout — skip if no API key)
+    withTimeout(getWeatherSignals()),
+    withTimeout(getCricketSignals()),                  // filtered: IPL + India matches only
 
-    // Trend & Competitive Intelligence (Apify + DataForSEO)
-    getPinterestSignals(),
-    getLystSignals(),
-    getCompetitorPricingSignals(),
-    getInstagramHashtagSignals(),
-    getOccasionDressingSignals(),                    // NEW: occasion dressing (interview, date, party, vacation)
+    // Trend & Competitive Intelligence (Apify + DataForSEO, 2s timeout)
+    withTimeout(getPinterestSignals()),
+    withTimeout(getLystSignals()),
+    withTimeout(getCompetitorPricingSignals()),
+    withTimeout(getInstagramHashtagSignals()),
+    withTimeout(getOccasionDressingSignals()),
 
     // Smart Recommendations (city targeting)
     Promise.resolve(getSmartRecommendationSignals()),
 
-    // NEW: Luxury F&L industry-wide signals
+    // Luxury F&L industry-wide signals
     Promise.resolve(getFashionEventSignals()),
     Promise.resolve(getWeddingIntensitySignals()),
-    getLuxuryCategorySignals(),                          // async — uses Apify (24h cache)
+    withTimeout(getLuxuryCategorySignals()),            // async — uses Apify (24h cache)
     Promise.resolve(getAestheticTrendSignals()),
     Promise.resolve(getRunwayPipelineSignals()),
     Promise.resolve(getLuxuryLaunchSignals()),
     Promise.resolve(getEconomicSentimentSignals()),
 
-    // NEW: Encoded intelligence from Rs 144 Cr ad spend analysis
+    // Encoded intelligence from Rs 144 Cr ad spend analysis
     Promise.resolve(getLuxuryDaypartRhythmSignals()),
     Promise.resolve(getLuxuryConsumerCalendarSignals()),
     Promise.resolve(getSaleEventDynamicsSignals()),
@@ -123,16 +132,16 @@ export async function getAllSignals(): Promise<Signal[]> {
     Promise.resolve(getCulturalFestivalFashionSignals()),
     Promise.resolve(getCompoundIntersectionSignals()),
 
-    // Live ad platform signals (require API tokens)
-    getMetaPerformanceSignals(),
-    getPlacementEfficiencySignals(),
-    getDaypartOptimizerSignals(),
-    getdemographicshiftsSignals(),
-    getfrequencymonitorSignals(),
-    getfunnelhealthSignals(),
-    getcreativeperformanceSignals(),
-    getgeoperformanceSignals(),
-    getcrossplatformorchestratorSignals(),
+    // Live ad platform signals (require API tokens, 2s timeout)
+    withTimeout(getMetaPerformanceSignals()),
+    withTimeout(getPlacementEfficiencySignals()),
+    withTimeout(getDaypartOptimizerSignals()),
+    withTimeout(getdemographicshiftsSignals()),
+    withTimeout(getfrequencymonitorSignals()),
+    withTimeout(getfunnelhealthSignals()),
+    withTimeout(getcreativeperformanceSignals()),
+    withTimeout(getgeoperformanceSignals()),
+    withTimeout(getcrossplatformorchestratorSignals()),
   ]);
 
   const allSignals: Signal[] = [];

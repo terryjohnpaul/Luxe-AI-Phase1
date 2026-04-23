@@ -995,21 +995,23 @@ if (diskCache) {
   console.log(`[Signals] Loaded ${diskCache.signals.length} signals from disk (fetched: ${diskCache.fetchedAt})`);
 }
 
-// Always refresh in background on startup, then every hour
-setTimeout(() => {
-  console.log("[Signals] Background refresh starting...");
-  refreshCache().catch(err => console.error("[Signals] Startup refresh failed:", err));
-}, 2000);
+// Background refresh — only for long-running servers (PM2), not serverless (Vercel)
+const isServerless = !process.env.PM2_HOME && process.env.VERCEL;
+if (!isServerless) {
+  setTimeout(() => {
+    console.log("[Signals] Background refresh starting...");
+    refreshCache().catch(err => console.error("[Signals] Startup refresh failed:", err));
+  }, 2000);
 
-// Reliable hourly refresh — setInterval never breaks even if a refresh fails
-setInterval(() => {
-  console.log("[Signals] Scheduled hourly refresh...");
-  refreshCache().catch(err => console.error("[Signals] Hourly refresh error:", err));
-}, CACHE_TTL_MS);
+  setInterval(() => {
+    console.log("[Signals] Scheduled hourly refresh...");
+    refreshCache().catch(err => console.error("[Signals] Hourly refresh error:", err));
+  }, CACHE_TTL_MS);
+}
 
-// Pre-warm all Intelligence page caches after signals cache is built
-// This ensures all pages load instantly, even after PM2 restart
-setTimeout(async () => {
+// Pre-warm Intelligence page caches — only for long-running servers
+if (!isServerless) {
+  setTimeout(async () => {
   const port = process.env.PORT || 3200;
   const base = `http://localhost:${port}`;
   const endpoints = [
@@ -1028,7 +1030,8 @@ setTimeout(async () => {
     }
   }
   console.log("[Prewarm] All Intelligence caches warmed");
-}, 10000); // Wait 10s for server to be ready
+  }, 10000);
+} // end isServerless check
 
 async function refreshCache(force = false): Promise<SignalCache> {
   if (cacheRefreshing && signalCache && !force) return signalCache;
@@ -1273,8 +1276,16 @@ export async function GET(request: Request) {
         // Stale cache exists — serve it and refresh in background
         refreshCache().catch(() => {});
       } else {
-        // No cache at all or forced refresh — must wait
-        cache = await refreshCache(forceRefresh);
+        // No cache at all or forced refresh — must wait (7s max for Vercel)
+        try {
+          cache = await Promise.race([
+            refreshCache(forceRefresh),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Cache refresh timeout")), 7000)),
+          ]);
+        } catch {
+          // If refresh times out, return whatever signals we got
+          cache = getCachedSignals();
+        }
       }
     } else {
       // Cache is fresh — check if approaching staleness, pre-refresh in background

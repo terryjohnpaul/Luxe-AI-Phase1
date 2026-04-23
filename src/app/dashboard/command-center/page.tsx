@@ -376,7 +376,10 @@ function CommandCenterContent() {
     try {
       const tiers = getActiveTiers().join(",");
       const refresh = forceRefresh ? "&refresh=true" : "";
-      const resp = await fetch(`/api/signals/live?mode=full&tiers=${tiers}${refresh}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const resp = await fetch(`/api/signals/live?mode=full&tiers=${tiers}${refresh}`, { signal: controller.signal });
+      clearTimeout(timeout);
       if (!resp.ok) {
         setData(getMockCommandCenterData());
         setLoading(false);
