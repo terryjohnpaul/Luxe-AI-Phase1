@@ -72,7 +72,7 @@ function ToastItem({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg border min-w-[280px] animate-in slide-in-from-right",
+        "flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg border min-w-[280px] toast-enter",
         toast.type === "success" && "bg-green-50 border-green-200 text-green-800",
         toast.type === "error" && "bg-red-50 border-red-200 text-red-800",
         toast.type === "info" && "bg-blue-50 border-blue-200 text-blue-800"

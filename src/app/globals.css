@@ -137,4 +137,79 @@
     cursor: pointer;
   }
   .btn-reject:hover { background: #b91c1c; }
+
+  /* ── Animations ── */
+
+  /* Card stagger entrance */
+  .card-enter {
+    animation: cardSlideUp 0.3s ease-out both;
+  }
+
+  /* Panel expand/collapse */
+  .panel-expand {
+    animation: panelSlideDown 0.25s ease-out both;
+    transform-origin: top;
+  }
+
+  /* Dropdown pop */
+  .dropdown-enter {
+    animation: dropdownPop 0.15s ease-out both;
+    transform-origin: bottom right;
+  }
+
+  /* Dialog overlay */
+  .dialog-overlay {
+    animation: fadeIn 0.15s ease-out both;
+  }
+
+  /* Dialog content */
+  .dialog-content {
+    animation: dialogScale 0.2s ease-out both;
+  }
+
+  /* Toast slide in */
+  .toast-enter {
+    animation: toastSlideIn 0.3s ease-out both;
+  }
+
+  /* Subtle pulse on change */
+  .flash-change {
+    animation: flashHighlight 0.6s ease-out;
+  }
+}
+
+/* Keyframes */
+@keyframes cardSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes panelSlideDown {
+  from { opacity: 0; max-height: 0; transform: scaleY(0.95); }
+  to { opacity: 1; max-height: 2000px; transform: scaleY(1); }
+}
+
+@keyframes dropdownPop {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogScale {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes flashHighlight {
+  0% { background-color: rgba(37, 99, 235, 0.1); }
+  100% { background-color: transparent; }
 }

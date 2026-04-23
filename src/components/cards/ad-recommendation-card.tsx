@@ -246,9 +246,9 @@ export function AdRecommendationCard({
   return (
     <article
       className={cn(
-        "bg-card rounded border border-card-border p-4 transition-all",
+        "bg-card rounded border border-card-border p-4 transition-all duration-200 card-enter hover:shadow-md",
         isApproved && "ring-2 ring-green-500",
-        isSkipped && "opacity-40",
+        isSkipped && "opacity-40 hover:shadow-none",
         className
       )}
       aria-label={`Ad recommendation: ${rec.title}`}
@@ -357,7 +357,7 @@ export function AdRecommendationCard({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => onPushToDraft(rec, "meta")}
-                    className="text-xs flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-blue text-brand-blue font-medium hover:bg-brand-blue hover:text-white transition-colors"
+                    className="text-xs flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-blue text-brand-blue font-medium hover:bg-brand-blue hover:text-white transition-all duration-200"
                     aria-label={`Craft draft campaign for ${rec.title} in Meta Ads`}
                     title="Create a draft campaign in Meta Ads Manager"
                   >
@@ -365,7 +365,7 @@ export function AdRecommendationCard({
                   </button>
                   <button
                     onClick={() => onPushToDraft(rec, "google")}
-                    className="text-xs flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-blue text-brand-blue font-medium hover:bg-brand-blue hover:text-white transition-colors"
+                    className="text-xs flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-blue text-brand-blue font-medium hover:bg-brand-blue hover:text-white transition-all duration-200"
                     aria-label={`Craft draft campaign for ${rec.title} in Google Ads`}
                     title="Create a draft campaign in Google Ads"
                   >
@@ -494,7 +494,7 @@ function SignalIntelligence({ signal, signalType, predictionFactors, methodology
 
       {/* Expanded details */}
       {expanded && (
-        <div className="px-4 py-4 space-y-4 border-t border-card-border">
+        <div className="px-4 py-4 space-y-4 border-t border-card-border panel-expand">
           {/* Signal description */}
           {signal.description && (
             <div>
@@ -834,7 +834,7 @@ function AdPlanPanel({
   // ── SAVED SUMMARY MODE ──
   if (saved && values) {
     return (
-      <div className="border-t border-card-border bg-surface/50 p-4 mt-4 -mx-4 -mb-4 rounded-b">
+      <div className="border-t border-card-border bg-surface/50 p-4 mt-4 -mx-4 -mb-4 rounded-b panel-expand">
         <div className="flex items-center justify-between mb-4">
           <h4 className="text-xs font-semibold flex items-center gap-2 text-green-700">
             <Check size={12} /> CUSTOMIZATION SAVED
@@ -882,7 +882,7 @@ function AdPlanPanel({
   if (editing && values) {
     return (
       <>
-        <div className="border-t border-card-border bg-surface/50 p-4 mt-4 -mx-4 -mb-4 rounded-b">
+        <div className="border-t border-card-border bg-surface/50 p-4 mt-4 -mx-4 -mb-4 rounded-b panel-expand">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h4 className="text-xs font-semibold flex items-center gap-2">
@@ -992,8 +992,8 @@ function AdPlanPanel({
 
         {showDiscardDialog && (
           <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="Discard changes">
-            <div className="absolute inset-0 bg-black/30" onClick={() => setShowDiscardDialog(false)} aria-hidden="true" />
-            <div className="relative bg-card rounded-lg border border-card-border shadow-xl p-4 w-full max-w-sm">
+            <div className="absolute inset-0 bg-black/30 dialog-overlay" onClick={() => setShowDiscardDialog(false)} aria-hidden="true" />
+            <div className="relative bg-card rounded-lg border border-card-border shadow-xl p-4 w-full max-w-sm dialog-content">
               <h3 className="text-sm font-semibold mb-1">Discard changes?</h3>
               <p className="text-xs text-muted mb-4">Your edits will be lost.</p>
               <div className="flex items-center justify-end gap-2">
@@ -1009,7 +1009,7 @@ function AdPlanPanel({
 
   // ── READ MODE (default) ──
   return (
-    <div className="border-t border-card-border bg-surface/50 p-4 mt-4 -mx-4 -mb-4 rounded-b space-y-4">
+    <div className="border-t border-card-border bg-surface/50 p-4 mt-4 -mx-4 -mb-4 rounded-b panel-expand space-y-4">
       {/* Header with Edit button */}
       <div className="flex items-center justify-between">
         <h4 className="text-xs font-semibold text-brand-purple flex items-center gap-1">
@@ -1112,7 +1112,7 @@ function AdPlanPanel({
 
 function SetupGuidePanel({ rec, copiedText, onCopy }: { rec: AdRecommendation; copiedText: string | null; onCopy: (text: string, label: string) => void }) {
   return (
-    <div className="border-t border-card-border bg-navy/5 p-4 mt-4 -mx-4 -mb-4 rounded-b space-y-4">
+    <div className="border-t border-card-border bg-navy/5 p-4 mt-4 -mx-4 -mb-4 rounded-b space-y-4 panel-expand">
       <h4 className="text-xs font-semibold text-brand-purple flex items-center gap-1">
         <Sparkles size={12} /> STEP-BY-STEP SETUP GUIDE
       </h4>
@@ -1229,7 +1229,7 @@ function SkipDropdown({
 
       {open && (
         <div
-          className="absolute right-0 bottom-full mb-1 w-64 bg-card border border-card-border rounded-lg shadow-lg py-1 z-10"
+          className="absolute right-0 bottom-full mb-1 w-64 bg-card border border-card-border rounded-lg shadow-lg py-1 z-10 dropdown-enter"
           role="menu"
           aria-label="Skip reasons"
         >

@@ -52,13 +52,13 @@ export function ConfirmDialog({
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/30"
+        className="absolute inset-0 bg-black/30 dialog-overlay"
         onClick={onCancel}
         aria-hidden="true"
       />
 
       {/* Dialog */}
-      <div className="relative bg-card rounded-lg border border-card-border shadow-xl p-4 w-full max-w-md">
+      <div className="relative bg-card rounded-lg border border-card-border shadow-xl p-4 w-full max-w-md dialog-content">
         <div className="flex items-start gap-4">
           <div className="p-2 bg-amber-100 rounded-lg shrink-0">
             <AlertTriangle size={18} className="text-amber-600" />
