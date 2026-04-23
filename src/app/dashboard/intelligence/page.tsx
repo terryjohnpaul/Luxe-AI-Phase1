@@ -11,6 +11,7 @@ import {
   Search, ChevronRight, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { BarChart, Bar, Cell, PieChart, Pie, ResponsiveContainer, Tooltip } from "recharts";
 
 // ============================================================
 // TYPES
@@ -412,28 +413,76 @@ export default function IntelligencePage() {
             <p className="text-xs text-muted mt-2">{signalPulse.count} high-severity across {signalPulse.activeTypes.length} types · Click any cell to filter</p>
           </div>
 
-          {/* Signal Trend */}
+          {/* Signal Trend — bar chart by severity */}
           {signalTrend && (
             <div className="bg-card border border-card-border rounded-lg p-4">
               <p className="text-xs font-medium text-muted mb-1">SIGNAL TREND</p>
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-2 mb-2">
                 <p className="text-sm font-bold">{signalTrend.current}</p>
                 <span className={cn("text-xs font-medium", signalTrend.up ? "text-green-600" : "text-red-500")}>
                   {signalTrend.up ? "↑" : "↓"} {Math.abs(signalTrend.pct)}%
                 </span>
               </div>
-              <p className="text-xs text-muted mt-1">critical + high signals</p>
-              <p className="text-xs text-muted">{signalTrend.newCritical} critical active now</p>
+              <ResponsiveContainer width="100%" height={100}>
+                <BarChart data={[
+                  { name: "Critical", value: severityCounts.critical, fill: "#dc2626" },
+                  { name: "High", value: severityCounts.high, fill: "#ea580c" },
+                  { name: "Medium", value: severityCounts.medium, fill: "#eab308" },
+                  { name: "Low", value: severityCounts.low, fill: "#16a34a" },
+                ]} barSize={24}>
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {[
+                      { fill: "#dc2626" },
+                      { fill: "#ea580c" },
+                      { fill: "#eab308" },
+                      { fill: "#16a34a" },
+                    ].map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="text-xs text-muted mt-1">{signalTrend.newCritical} critical active now</p>
             </div>
           )}
 
-          {/* Category Insight */}
+          {/* Category Insight — donut chart */}
           {categoryInsight && (
             <div className="bg-card border border-card-border rounded-lg p-4">
               <p className="text-xs font-medium text-muted mb-1">CATEGORY INSIGHT</p>
-              <p className="text-sm font-bold">{categoryInsight.topType}</p>
-              <p className="text-xs text-muted mt-1">{categoryInsight.topCount} signals ({categoryInsight.topPct}%)</p>
-              <p className="text-xs text-muted">{categoryInsight.internalPct}% from ad spend data</p>
+              <div className="flex items-center gap-4">
+                <ResponsiveContainer width={100} height={100}>
+                  <PieChart>
+                    <Pie
+                      data={typeOptions.slice(0, 6).map((opt, i) => ({
+                        name: opt.label,
+                        value: opt.count,
+                      }))}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={28}
+                      outerRadius={45}
+                      dataKey="value"
+                      strokeWidth={1}
+                    >
+                      {typeOptions.slice(0, 6).map((_, i) => (
+                        <Cell key={i} fill={["#2563eb", "#7c3aed", "#ea580c", "#16a34a", "#eab308", "#64748b"][i]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="space-y-1">
+                  {typeOptions.slice(0, 5).map((opt, i) => (
+                    <div key={opt.key} className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ["#2563eb", "#7c3aed", "#ea580c", "#16a34a", "#eab308"][i] }} />
+                      <span className="text-xs text-muted">{opt.label}</span>
+                      <span className="text-xs font-semibold">{opt.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
