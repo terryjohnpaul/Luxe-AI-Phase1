@@ -202,7 +202,7 @@ export default function IntelligencePage() {
               <span className="text-xs font-medium text-muted">LIVE · Updated {timeAgo(data.fetchedAt)}</span>
             </div>
             <h1 className="text-3xl font-bold">Intelligence Feed</h1>
-            <p className="text-xs text-muted mt-1">{data.signals.length} signals from {Object.keys(data.sources).length} sources</p>
+            <p className="text-xs text-muted mt-1">{data.signals.length} signals{data.sources ? ` from ${Object.keys(data.sources).length} sources` : ""}</p>
           </div>
         </div>
 
