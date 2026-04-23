@@ -308,10 +308,10 @@ export default function IntelligencePage() {
                 {isExpanded && (
                   <div className="px-4 pb-4 pt-2 border-t border-card-border panel-expand">
                     <div className="grid grid-cols-[1fr_1fr] gap-8">
-                      {/* Left: Signal details */}
-                      <div className="space-y-4">
-                        {/* Type + Confidence */}
-                        <div className="flex items-center gap-2">
+                      {/* Left: Signal details — tighter gaps */}
+                      <div className="space-y-2">
+                        {/* Type + Confidence + Source */}
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs bg-surface px-2 py-0.5 rounded font-medium">{TYPE_LABELS[signal.type] || signal.type}</span>
                           <span className="text-xs text-muted">{Math.round(signal.confidence * 100)}% confidence</span>
                           {signal.dataSource && (
@@ -328,41 +328,22 @@ export default function IntelligencePage() {
                         {/* Description */}
                         <p className="text-xs leading-relaxed">{signal.description}</p>
 
-                        {/* Brands */}
-                        {signal.suggestedBrands.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {signal.suggestedBrands.map((b) => (
-                              <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Location + Archetypes */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <p className="text-xs font-medium text-muted mb-1">LOCATION</p>
-                            <p className="text-xs">{signal.location}</p>
-                          </div>
+                        {/* Brands + Location + Audience — compact inline */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {signal.suggestedBrands.map((b) => (
+                            <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
+                          ))}
+                          <span className="text-xs text-muted">{signal.location}</span>
                           {signal.targetArchetypes.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-muted mb-1">TARGET AUDIENCE</p>
-                              <p className="text-xs">{signal.targetArchetypes.join(", ")}</p>
-                            </div>
+                            <span className="text-xs text-muted">· {signal.targetArchetypes.join(", ")}</span>
                           )}
                         </div>
                       </div>
 
-                      {/* Right: What to do */}
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-xs font-medium text-muted mb-1">WHY IT MATTERS</p>
-                          <p className="text-xs leading-relaxed">{signal.triggersWhat}</p>
-                        </div>
-
-                        <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2">
-                          <p className="text-xs font-medium text-green-800 mb-1">RECOMMENDED ACTION</p>
-                          <p className="text-xs text-green-700">{signal.suggestedAction}</p>
-                        </div>
+                      {/* Right: Action only */}
+                      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-4">
+                        <p className="text-xs font-medium text-green-800 mb-1">RECOMMENDED ACTION</p>
+                        <p className="text-xs text-green-700 leading-relaxed">{signal.suggestedAction}</p>
                       </div>
                     </div>
                   </div>
