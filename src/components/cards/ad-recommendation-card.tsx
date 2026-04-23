@@ -1193,26 +1193,63 @@ function SetupGuidePanel({ rec, copiedText, onCopy }: { rec: AdRecommendation; c
   return (
     <div className="border-t border-card-border bg-navy/5 p-4 mt-4 -mx-4 -mb-4 rounded-b space-y-4 panel-expand">
       <h4 className="text-xs font-semibold text-brand-purple flex items-center gap-1">
-        <Sparkles size={12} /> STEP-BY-STEP SETUP GUIDE
+        <Sparkles size={12} /> SETUP GUIDE
       </h4>
       <div className="grid grid-cols-2 gap-4">
-        <GuideBlock title="META ADS MANAGER" titleColor="text-blue-600" content={rec.executionGuide.meta} copyKey={`meta-guide-${rec.id}`} copiedText={copiedText} onCopy={onCopy} />
-        <GuideBlock title="GOOGLE ADS" titleColor="text-green-600" content={rec.executionGuide.google} copyKey={`google-guide-${rec.id}`} copiedText={copiedText} onCopy={onCopy} />
+        <GuideBlock title="META ADS MANAGER" borderColor="border-l-blue-500" content={rec.executionGuide.meta} copyKey={`meta-guide-${rec.id}`} copiedText={copiedText} onCopy={onCopy} />
+        <GuideBlock title="GOOGLE ADS" borderColor="border-l-green-500" content={rec.executionGuide.google} copyKey={`google-guide-${rec.id}`} copiedText={copiedText} onCopy={onCopy} />
       </div>
     </div>
   );
 }
 
-function GuideBlock({ title, titleColor, content, copyKey, copiedText, onCopy }: { title: string; titleColor: string; content: string; copyKey: string; copiedText: string | null; onCopy: (text: string, label: string) => void }) {
+function parseGuideSteps(content: string): { num: string; label: string; value: string }[] {
+  return content
+    .split("\n")
+    .filter((line) => /^\d+\./.test(line.trim()))
+    .map((line) => {
+      const match = line.trim().match(/^(\d+)\.\s*([^:]+):\s*(.+)$/);
+      if (match) {
+        return { num: match[1], label: match[2].trim(), value: match[3].trim() };
+      }
+      const fallback = line.trim().match(/^(\d+)\.\s*(.+)$/);
+      return { num: fallback?.[1] || "•", label: "", value: fallback?.[2] || line.trim() };
+    });
+}
+
+function GuideBlock({ title, borderColor, content, copyKey, copiedText, onCopy }: { title: string; borderColor: string; content: string; copyKey: string; copiedText: string | null; onCopy: (text: string, label: string) => void }) {
+  const steps = parseGuideSteps(content);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className={cn("text-xs font-semibold", titleColor)}>{title}</p>
-        <button onClick={() => onCopy(content, copyKey)} className="text-xs text-brand-blue hover:underline flex items-center gap-1" aria-label={`Copy ${title} guide`}>
-          <Copy size={12} /> {copiedText === copyKey ? "Copied!" : "Copy guide"}
+        <p className="text-xs font-semibold">{title}</p>
+        <button onClick={() => onCopy(content, copyKey)} className="text-xs text-brand-blue hover:underline flex items-center gap-1" aria-label={`Copy ${title} steps`}>
+          <Copy size={12} /> {copiedText === copyKey ? "Copied!" : "Copy steps"}
         </button>
       </div>
-      <pre className="text-xs text-text-secondary bg-white p-4 rounded-lg border border-card-border whitespace-pre-wrap font-sans leading-relaxed">{content}</pre>
+      <div className={cn("bg-white rounded-lg border border-card-border overflow-hidden border-l-4", borderColor)}>
+        {steps.map((step, i) => (
+          <div
+            key={i}
+            className={cn(
+              "flex items-start gap-4 px-4 py-2",
+              i < steps.length - 1 && "border-b border-card-border/50",
+              i % 2 === 1 && "bg-surface/30"
+            )}
+          >
+            <span className="text-xs font-bold text-muted w-5 shrink-0 mt-0.5">{step.num}</span>
+            {step.label ? (
+              <>
+                <span className="text-xs font-semibold w-24 shrink-0 mt-0.5">{step.label}</span>
+                <span className="text-xs text-text-secondary">{step.value}</span>
+              </>
+            ) : (
+              <span className="text-xs text-text-secondary">{step.value}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
