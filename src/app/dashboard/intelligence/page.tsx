@@ -33,6 +33,7 @@ interface ApiSignal {
   signalCategory?: "external" | "internal";
   dataSource?: string;
   sourceUrl?: string | null;
+  data?: Record<string, unknown>;
 }
 
 interface ApiResponse {
@@ -99,6 +100,48 @@ function timeAgo(dateStr: string): string {
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function expiresIn(dateStr: string): { text: string; urgent: boolean; warning: boolean } {
+  const diff = new Date(dateStr).getTime() - Date.now();
+  if (diff <= 0) return { text: "Expired", urgent: true, warning: false };
+  const hrs = Math.floor(diff / 3600000);
+  if (hrs < 24) return { text: `Expires in ${hrs}h`, urgent: true, warning: false };
+  const days = Math.floor(hrs / 24);
+  if (days <= 3) return { text: `Expires in ${days}d`, urgent: false, warning: true };
+  return { text: `Expires in ${days}d`, urgent: false, warning: false };
+}
+
+function formatMetricKey(key: string): string {
+  return key
+    .replace(/_pct$/i, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatMetricValue(key: string, value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value.replace(/_/g, " ");
+  if (typeof value === "number") {
+    if (key.endsWith("_pct") || key.includes("pct")) return `${(value * 100).toFixed(1)}%`;
+    if (key.includes("conv") || key.includes("rate") || key.includes("ctr")) return `${value}%`;
+    if (key.includes("multiplier") || key.includes("mult")) return `${value}x`;
+    if (key.includes("index") && value <= 10) return `${value}/10`;
+    if (value >= 1000) return value.toLocaleString("en-IN");
+    return value.toString();
+  }
+  return String(value);
+}
+
+function parseMetrics(data: Record<string, unknown> | undefined): { label: string; value: string }[] {
+  if (!data || typeof data !== "object") return [];
+  return Object.entries(data)
+    .filter(([key]) => !["id", "source", "type", "detectedAt", "expiresAt"].includes(key))
+    .map(([key, val]) => ({ label: formatMetricKey(key), value: formatMetricValue(key, val) }))
+    .filter((m): m is { label: string; value: string } => m.value !== null)
+    .slice(0, 6);
 }
 
 // ============================================================
@@ -305,49 +348,87 @@ export default function IntelligencePage() {
                 </button>
 
                 {/* Expanded detail */}
-                {isExpanded && (
-                  <div className="px-4 pb-4 pt-2 border-t border-card-border panel-expand">
-                    <div className="grid grid-cols-[1fr_1fr] gap-8">
-                      {/* Left: Signal details — tighter gaps */}
-                      <div className="space-y-2">
-                        {/* Type + Confidence + Source */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs bg-surface px-2 py-0.5 rounded font-medium">{TYPE_LABELS[signal.type] || signal.type}</span>
-                          <span className="text-xs text-muted">{Math.round(signal.confidence * 100)}% confidence</span>
-                          {signal.dataSource && (
-                            signal.sourceUrl ? (
-                              <a href={signal.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-blue hover:underline">
-                                {signal.dataSource} ↗
-                              </a>
-                            ) : (
-                              <span className="text-xs text-muted">{signal.dataSource}</span>
-                            )
+                {isExpanded && (() => {
+                  const expiry = expiresIn(signal.expiresAt);
+                  const metrics = parseMetrics(signal.data as Record<string, unknown> | undefined);
+                  return (
+                    <div className="px-4 pb-4 pt-2 border-t border-card-border panel-expand">
+                      <div className="grid grid-cols-[1fr_1fr] gap-8">
+                        {/* Left: Signal details */}
+                        <div className="space-y-2">
+                          {/* Metadata line */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs bg-surface px-2 py-0.5 rounded font-medium">{TYPE_LABELS[signal.type] || signal.type}</span>
+                            <span className={cn("text-xs px-2 py-0.5 rounded font-medium", signal.signalCategory === "internal" ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-600")}>
+                              {signal.signalCategory === "internal" ? "Internal" : "External"}
+                            </span>
+                            <span className="text-xs text-muted">{Math.round(signal.confidence * 100)}% confidence</span>
+                          </div>
+
+                          {/* Source + Expiry */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {signal.dataSource && (
+                              signal.sourceUrl ? (
+                                <a href={signal.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-blue hover:underline">
+                                  {signal.dataSource} ↗
+                                </a>
+                              ) : (
+                                <span className="text-xs text-muted">{signal.dataSource}</span>
+                              )
+                            )}
+                            <span className={cn("text-xs font-medium", expiry.urgent ? "text-red-500" : expiry.warning ? "text-amber-500" : "text-muted")}>
+                              {expiry.text}
+                            </span>
+                          </div>
+
+                          {/* Description */}
+                          <p className="text-xs leading-relaxed">{signal.description}</p>
+
+                          {/* Key Metrics */}
+                          {metrics.length > 0 && (
+                            <div className="border border-card-border rounded-lg p-2">
+                              <p className="text-xs font-medium text-muted mb-1">KEY METRICS</p>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                {metrics.map((m) => (
+                                  <div key={m.label} className="flex items-center justify-between">
+                                    <span className="text-xs text-muted">{m.label}</span>
+                                    <span className="text-xs font-semibold">{m.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           )}
+
+                          {/* Brands + Location + Audience */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {signal.suggestedBrands.map((b) => (
+                              <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
+                            ))}
+                            <span className="text-xs text-muted">{signal.location}</span>
+                            {signal.targetArchetypes.length > 0 && (
+                              <span className="text-xs text-muted">· {signal.targetArchetypes.join(", ")}</span>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Description */}
-                        <p className="text-xs leading-relaxed">{signal.description}</p>
+                        {/* Right: Action + Impact */}
+                        <div className="space-y-2">
+                          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-4">
+                            <p className="text-xs font-medium text-green-800 mb-1">RECOMMENDED ACTION</p>
+                            <p className="text-xs text-green-700 leading-relaxed">{signal.suggestedAction}</p>
+                          </div>
 
-                        {/* Brands + Location + Audience — compact inline */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {signal.suggestedBrands.map((b) => (
-                            <span key={b} className="text-xs bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-medium">{b}</span>
-                          ))}
-                          <span className="text-xs text-muted">{signal.location}</span>
-                          {signal.targetArchetypes.length > 0 && (
-                            <span className="text-xs text-muted">· {signal.targetArchetypes.join(", ")}</span>
+                          {signal.triggersWhat && (
+                            <div className="border border-card-border rounded-lg px-4 py-4">
+                              <p className="text-xs font-medium text-muted mb-1">IMPACT</p>
+                              <p className="text-xs leading-relaxed">{signal.triggersWhat}</p>
+                            </div>
                           )}
                         </div>
-                      </div>
-
-                      {/* Right: Action only */}
-                      <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-4">
-                        <p className="text-xs font-medium text-green-800 mb-1">RECOMMENDED ACTION</p>
-                        <p className="text-xs text-green-700 leading-relaxed">{signal.suggestedAction}</p>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             );
           })}
