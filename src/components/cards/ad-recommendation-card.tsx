@@ -650,11 +650,16 @@ function ProfitProbabilityBadge({ prediction }: { prediction: AdRecommendation["
             </div>
           ))}
 
-          {roi && (
-            <div className="border-t border-card-border pt-2 mt-1">
-              <p className="text-xs text-muted">Est. ROI: <span className="font-semibold text-text">{roi}</span></p>
-            </div>
-          )}
+          {roi && (() => {
+            const roiNum = parseInt(roi);
+            const multiplier = (roiNum / 100 + 1).toFixed(1);
+            return (
+              <div className="border-t border-card-border pt-2 mt-1">
+                <p className="text-xs font-semibold">Every ₹1 spent → ₹{multiplier} back</p>
+                <p className="text-xs text-muted">Net ROI {roi} — after ad spend + 55% product margin</p>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
