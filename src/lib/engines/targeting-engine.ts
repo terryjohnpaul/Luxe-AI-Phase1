@@ -675,10 +675,16 @@ export async function getDataDrivenTargeting(
   platform?: string,
   signalLocation?: string
 ): Promise<TargetingRecommendation | null> {
+  // Fast-fail: no DB or Redis = return null (use fallback targeting in route)
+  if (!db || !process.env.DATABASE_URL) return null;
+
   // Check Redis cache
   const cacheKey = `${CACHE_KEY_PREFIX}${signalType}:${platform || "all"}:${signalLocation || "pan"}`;
   try {
-    const cached = await redis.get(cacheKey);
+    const cached = await Promise.race([
+      redis.get(cacheKey),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 1000)),
+    ]);
     if (cached) {
       return JSON.parse(cached);
     }
