@@ -903,6 +903,11 @@ function AdPlanPanel({
   };
 
   const handleSave = () => {
+    if (!isDirty) {
+      // Nothing changed — just go back to read mode
+      setEditing(false);
+      return;
+    }
     onSave(rec.id);
     setSaved(true);
     setEditing(false);
