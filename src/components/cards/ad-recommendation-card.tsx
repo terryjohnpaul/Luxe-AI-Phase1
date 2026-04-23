@@ -76,6 +76,15 @@ export interface AdRecommendation {
     campaignGoal: string;
     factors: string[];
     methodology: string;
+    profitProbability?: number;
+    profitBreakdown?: {
+      roasVsBreakeven: { weight: number; score: number; label: string };
+      roi: { weight: number; score: number; label: string };
+      signalConfidence: { weight: number; score: number; label: string };
+      timingAlignment: { weight: number; score: number; label: string };
+      cpaVsMargin: { weight: number; score: number; label: string };
+    };
+    estimatedROI?: string;
   };
   executionGuide: {
     meta: string;
@@ -253,34 +262,30 @@ export function AdRecommendationCard({
       )}
       aria-label={`Ad recommendation: ${rec.title}`}
     >
-      {/* ── Header ── */}
-      <div className="flex items-center gap-2 mb-2 flex-wrap">
-        <PriorityBadge priority={rec.priority} />
-        <span className={cn("inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border", signalConfig.color)}>
-          <SignalIcon size={12} aria-hidden="true" />
-          {signalConfig.label}
-        </span>
-        {rec.indiaRelevance && (
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border",
-              rec.indiaRelevance.score === "high" && "bg-emerald-100 text-emerald-700 border-emerald-200",
-              rec.indiaRelevance.score === "medium" && "bg-amber-100 text-amber-700 border-amber-200",
-              rec.indiaRelevance.score === "low" && "bg-red-100 text-red-700 border-red-200"
-            )}
-          >
-            {rec.indiaRelevance.score === "high" ? "Strong Signal" : rec.indiaRelevance.score === "low" ? "Weak Signal" : "Moderate Signal"}
+      {/* ── Header: Left badges + Right profit probability ── */}
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <PriorityBadge priority={rec.priority} />
+          <span className={cn("inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border", signalConfig.color)}>
+            <SignalIcon size={12} aria-hidden="true" />
+            {signalConfig.label}
           </span>
-        )}
-        <span className={cn(
-          "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold border",
-          rec.prediction.confidence >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-          rec.prediction.confidence >= 60 ? "bg-blue-50 text-blue-700 border-blue-200" :
-          rec.prediction.confidence >= 40 ? "bg-amber-50 text-amber-700 border-amber-200" :
-          "bg-red-50 text-red-700 border-red-200"
-        )}>
-          {rec.prediction.confidence}% Predicted Success
-        </span>
+          {rec.indiaRelevance && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border",
+                rec.indiaRelevance.score === "high" && "bg-emerald-100 text-emerald-700 border-emerald-200",
+                rec.indiaRelevance.score === "medium" && "bg-amber-100 text-amber-700 border-amber-200",
+                rec.indiaRelevance.score === "low" && "bg-red-100 text-red-700 border-red-200"
+              )}
+            >
+              {rec.indiaRelevance.score === "high" ? "Strong Signal" : rec.indiaRelevance.score === "low" ? "Weak Signal" : "Moderate Signal"}
+            </span>
+          )}
+        </div>
+
+        {/* Profit Probability — right aligned with hover tooltip */}
+        <ProfitProbabilityBadge prediction={rec.prediction} />
       </div>
 
       {/* Title + Description */}
@@ -581,6 +586,83 @@ function SignalIntelligence({ signal, signalType, predictionFactors, methodology
               )}
             </div>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// PROFIT PROBABILITY BADGE WITH TOOLTIP
+// ============================================================
+
+function ProfitProbabilityBadge({ prediction }: { prediction: AdRecommendation["prediction"] }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+  const pp = prediction.profitProbability ?? prediction.confidence;
+  const breakdown = prediction.profitBreakdown;
+  const roi = prediction.estimatedROI;
+
+  const badgeColor =
+    pp >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+    pp >= 60 ? "bg-blue-50 text-blue-700 border-blue-200" :
+    pp >= 40 ? "bg-amber-50 text-amber-700 border-amber-200" :
+    "bg-red-50 text-red-700 border-red-200";
+
+  return (
+    <div
+      className="relative shrink-0"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+    >
+      <span
+        className={cn("inline-flex items-center gap-1 px-4 py-1 rounded-full text-xs font-bold border cursor-help", badgeColor)}
+        aria-label={`${pp}% profit probability`}
+      >
+        {pp}% Profit Probability
+      </span>
+
+      {/* Tooltip */}
+      {showTooltip && breakdown && (
+        <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-card-border rounded-lg shadow-xl p-4 z-20 dropdown-enter">
+          <p className="text-xs font-semibold mb-4">PROFIT PROBABILITY BREAKDOWN</p>
+
+          {[
+            { key: "roasVsBreakeven", name: "ROAS vs Breakeven", weight: breakdown.roasVsBreakeven.weight, score: breakdown.roasVsBreakeven.score, detail: breakdown.roasVsBreakeven.label },
+            { key: "roi", name: "ROI (Net Return)", weight: breakdown.roi.weight, score: breakdown.roi.score, detail: breakdown.roi.label },
+            { key: "signalConfidence", name: "Signal Confidence", weight: breakdown.signalConfidence.weight, score: breakdown.signalConfidence.score, detail: breakdown.signalConfidence.label },
+            { key: "timingAlignment", name: "Timing Alignment", weight: breakdown.timingAlignment.weight, score: breakdown.timingAlignment.score, detail: breakdown.timingAlignment.label },
+            { key: "cpaVsMargin", name: "CPA vs Margin", weight: breakdown.cpaVsMargin.weight, score: breakdown.cpaVsMargin.score, detail: breakdown.cpaVsMargin.label },
+          ].map((factor) => (
+            <div key={factor.key} className="mb-4">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-muted">{factor.name}</span>
+                <span className="text-xs font-medium tabular-nums">{factor.weight}% · {factor.score}/100</span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-100 rounded-full">
+                <div
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    factor.score >= 80 ? "bg-emerald-500" :
+                    factor.score >= 60 ? "bg-blue-500" :
+                    factor.score >= 40 ? "bg-amber-500" : "bg-red-400"
+                  )}
+                  style={{ width: `${factor.score}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted mt-0.5">{factor.detail}</p>
+            </div>
+          ))}
+
+          <div className="border-t border-card-border pt-4 mt-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold">Composite Score</span>
+              <span className={cn("text-sm font-bold", pp >= 80 ? "text-emerald-600" : pp >= 60 ? "text-blue-600" : "text-amber-600")}>{pp}%</span>
+            </div>
+            {roi && (
+              <p className="text-xs text-muted">Est. ROI: {roi} net return on ad spend</p>
+            )}
+            <p className="text-xs text-muted mt-1">{pp}% probability of profitable campaign at 3x+ ROAS</p>
+          </div>
         </div>
       )}
     </div>

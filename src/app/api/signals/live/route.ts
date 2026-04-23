@@ -317,6 +317,23 @@ function buildPrediction(signal: Signal, tiers: BrandTier[]) {
     factors.push("Best used as AWARENESS campaign — track brand recall and reach, not direct ROAS");
   }
 
+  // === PROFIT PROBABILITY — composite score ===
+  const breakeven = 3.0; // 3x ROAS breakeven for luxury fashion
+  const margin = tierAOV * 0.55;
+  const grossProfit = revenue * 0.55;
+  const roi = totalBudget > 0 ? ((grossProfit - totalBudget) / totalBudget) * 100 : 0;
+
+  // Factor scores (0-1 scale)
+  const roasScore = Math.min(1.0, roas / (breakeven * 3)); // 1.0 at 9x+ ROAS
+  const roiScore = Math.min(1.0, Math.max(0, roi / 500)); // 1.0 at 500%+ ROI
+  const signalScore = signal.confidence;
+  const timingScore = Math.min(1.0, Math.max(0, dataMultiplier / 1.5)); // 1.0 at 1.5x+ timing
+  const cpaScore = cpa > 0 && margin > 0 ? Math.min(1.0, margin / cpa) : 0.5; // 1.0 when CPA < margin
+
+  const profitProbability = Math.round(
+    (roasScore * 0.35 + roiScore * 0.20 + signalScore * 0.20 + timingScore * 0.15 + cpaScore * 0.10) * 100
+  );
+
   return {
     confidence: Math.round(signal.confidence * 100),
     estimatedReach: range(reach),
@@ -330,6 +347,15 @@ function buildPrediction(signal: Signal, tiers: BrandTier[]) {
     campaignGoal: isAwareness ? "Brand Awareness" : "Conversions",
     factors,
     methodology: "Projections based on luxury fashion India benchmarks from WordStream 2024, RedSeer India Fashion, Bain x Flipkart 'How India Shops Online', and dentsu/iProspect case studies. Adjusted for signal type, severity, confidence, tier AOV, and budget. Assumes prospecting-heavy campaign. Connect your Meta/Google Ads for actuals-based projections.",
+    profitProbability,
+    profitBreakdown: {
+      roasVsBreakeven: { weight: 35, score: Math.round(roasScore * 100), label: `ROAS ${roas.toFixed(1)}x vs ${breakeven}x breakeven` },
+      roi: { weight: 20, score: Math.round(roiScore * 100), label: `ROI ${Math.round(roi)}% net return` },
+      signalConfidence: { weight: 20, score: Math.round(signalScore * 100), label: `Signal data ${Math.round(signalScore * 100)}% reliable` },
+      timingAlignment: { weight: 15, score: Math.round(timingScore * 100), label: `Timing multiplier ${dataMultiplier.toFixed(2)}x` },
+      cpaVsMargin: { weight: 10, score: Math.round(cpaScore * 100), label: cpa > 0 ? `CPA ₹${cpa.toLocaleString("en-IN")} vs ₹${Math.round(margin).toLocaleString("en-IN")} margin` : "CPA not estimated" },
+    },
+    estimatedROI: `${Math.round(roi)}%`,
   };
 }
 
