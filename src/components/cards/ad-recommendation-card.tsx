@@ -623,48 +623,38 @@ function ProfitProbabilityBadge({ prediction }: { prediction: AdRecommendation["
         {pp}% Profit Probability
       </button>
 
-      {/* Tooltip */}
+      {/* Tooltip — opens left of badge, stays within card */}
       {showTooltip && breakdown && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-card-border rounded-lg shadow-2xl p-4 z-50 dropdown-enter">
-          <p className="text-xs font-semibold mb-4">PROFIT PROBABILITY BREAKDOWN</p>
+        <div className="absolute right-0 top-0 mt-8 w-72 bg-card border border-card-border rounded-lg shadow-2xl p-4 z-50 dropdown-enter">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold">PROFIT PROBABILITY</p>
+            <span className={cn("text-sm font-bold", pp >= 80 ? "text-emerald-600" : pp >= 60 ? "text-blue-600" : "text-amber-600")}>{pp}%</span>
+          </div>
 
           {[
-            { key: "roasVsBreakeven", name: "ROAS vs Breakeven", weight: breakdown.roasVsBreakeven.weight, score: breakdown.roasVsBreakeven.score, detail: breakdown.roasVsBreakeven.label },
-            { key: "roi", name: "ROI (Net Return)", weight: breakdown.roi.weight, score: breakdown.roi.score, detail: breakdown.roi.label },
-            { key: "signalConfidence", name: "Signal Confidence", weight: breakdown.signalConfidence.weight, score: breakdown.signalConfidence.score, detail: breakdown.signalConfidence.label },
-            { key: "timingAlignment", name: "Timing Alignment", weight: breakdown.timingAlignment.weight, score: breakdown.timingAlignment.score, detail: breakdown.timingAlignment.label },
-            { key: "cpaVsMargin", name: "CPA vs Margin", weight: breakdown.cpaVsMargin.weight, score: breakdown.cpaVsMargin.score, detail: breakdown.cpaVsMargin.label },
-          ].map((factor) => (
-            <div key={factor.key} className="mb-4">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-muted">{factor.name}</span>
-                <span className="text-xs font-medium tabular-nums">{factor.weight}% · {factor.score}/100</span>
-              </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full">
+            { key: "roas", name: "ROAS", score: breakdown.roasVsBreakeven.score, detail: breakdown.roasVsBreakeven.label },
+            { key: "roi", name: "ROI", score: breakdown.roi.score, detail: breakdown.roi.label },
+            { key: "signal", name: "Signal", score: breakdown.signalConfidence.score, detail: breakdown.signalConfidence.label },
+            { key: "timing", name: "Timing", score: breakdown.timingAlignment.score, detail: breakdown.timingAlignment.label },
+            { key: "cpa", name: "CPA", score: breakdown.cpaVsMargin.score, detail: breakdown.cpaVsMargin.label },
+          ].map((f) => (
+            <div key={f.key} className="flex items-center gap-2 mb-2">
+              <span className="text-xs text-muted w-12 shrink-0">{f.name}</span>
+              <div className="flex-1 h-1.5 bg-gray-100 rounded-full">
                 <div
-                  className={cn(
-                    "h-1.5 rounded-full transition-all",
-                    factor.score >= 80 ? "bg-emerald-500" :
-                    factor.score >= 60 ? "bg-blue-500" :
-                    factor.score >= 40 ? "bg-amber-500" : "bg-red-400"
-                  )}
-                  style={{ width: `${factor.score}%` }}
+                  className={cn("h-1.5 rounded-full", f.score >= 80 ? "bg-emerald-500" : f.score >= 60 ? "bg-blue-500" : f.score >= 40 ? "bg-amber-500" : "bg-red-400")}
+                  style={{ width: `${f.score}%` }}
                 />
               </div>
-              <p className="text-xs text-muted mt-0.5">{factor.detail}</p>
+              <span className="text-xs tabular-nums text-muted w-8 text-right">{f.score}</span>
             </div>
           ))}
 
-          <div className="border-t border-card-border pt-4 mt-2">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-semibold">Composite Score</span>
-              <span className={cn("text-sm font-bold", pp >= 80 ? "text-emerald-600" : pp >= 60 ? "text-blue-600" : "text-amber-600")}>{pp}%</span>
+          {roi && (
+            <div className="border-t border-card-border pt-2 mt-1">
+              <p className="text-xs text-muted">Est. ROI: <span className="font-semibold text-text">{roi}</span></p>
             </div>
-            {roi && (
-              <p className="text-xs text-muted">Est. ROI: {roi} net return on ad spend</p>
-            )}
-            <p className="text-xs text-muted mt-1">{pp}% probability of profitable campaign at 3x+ ROAS</p>
-          </div>
+          )}
         </div>
       )}
     </div>
