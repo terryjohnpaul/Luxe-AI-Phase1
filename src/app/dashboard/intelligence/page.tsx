@@ -11,7 +11,7 @@ import {
   Search, ChevronRight, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { BarChart, Bar, Cell, PieChart, Pie, ResponsiveContainer, Tooltip } from "recharts";
+import { BarChart, Bar, Cell, PieChart, Pie, ResponsiveContainer, Tooltip, XAxis, LabelList } from "recharts";
 
 // ============================================================
 // TYPES
@@ -430,9 +430,11 @@ export default function IntelligencePage() {
                   { name: "High", value: severityCounts.high, fill: "#ea580c" },
                   { name: "Medium", value: severityCounts.medium, fill: "#eab308" },
                   { name: "Low", value: severityCounts.low, fill: "#16a34a" },
-                ]} barSize={24}>
+                ]} barSize={28} margin={{ top: 16, bottom: 0 }}>
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#64748b" }} axisLine={false} tickLine={false} />
                   <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    <LabelList dataKey="value" position="top" style={{ fontSize: 10, fontWeight: 700, fill: "#0f172a" }} />
                     {[
                       { fill: "#dc2626" },
                       { fill: "#ea580c" },
