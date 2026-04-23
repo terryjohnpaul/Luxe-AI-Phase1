@@ -88,7 +88,7 @@ const TYPE_LABELS: Record<string, string> = {
   social_trend: "Social", travel: "Travel", regional: "Regional", inventory: "Inventory",
   competitor: "Competitor", economic: "Economic", gift_occasion: "Gift", sale_event: "Sale",
   occasion_dressing: "Occasion", fashion_event: "Fashion", wedding: "Wedding",
-  aesthetic: "Aesthetic", runway: "Runway", launch: "Launch", category_demand: "Category",
+  aesthetic: "Aesthetic", runway: "Runway", launch: "Launch", category_demand: "Demand",
 };
 
 function timeAgo(dateStr: string): string {
@@ -206,8 +206,9 @@ export default function IntelligencePage() {
           </div>
         </div>
 
-        {/* Severity filter */}
-        <div className="flex items-center gap-1 mb-2">
+        {/* Severity */}
+        <p className="text-xs text-muted font-medium mb-1">Severity</p>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           {(["all", "critical", "high", "medium", "low"] as const).map((sev) => {
             const count = severityCounts[sev];
             const label = sev === "all" ? "All" : sev.charAt(0).toUpperCase() + sev.slice(1);
@@ -217,12 +218,12 @@ export default function IntelligencePage() {
                 onClick={() => setSeverityFilter(sev)}
                 disabled={count === 0 && sev !== "all"}
                 className={cn(
-                  "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+                  "px-4 py-1 rounded-full text-xs font-medium transition-colors border",
                   severityFilter === sev
-                    ? "bg-navy text-white"
+                    ? "bg-navy text-white border-navy"
                     : count === 0 && sev !== "all"
-                      ? "text-muted/40 cursor-default"
-                      : "text-muted hover:bg-surface"
+                      ? "text-muted/40 border-card-border cursor-default"
+                      : "text-muted border-card-border hover:border-muted hover:text-text"
                 )}
               >
                 {label} ({count})
@@ -231,18 +232,19 @@ export default function IntelligencePage() {
           })}
         </div>
 
-        {/* Category filter — wrapping */}
+        {/* Signal Type */}
+        <p className="text-xs text-muted font-medium mb-1">Signal Type</p>
         <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-card-border">
-          {categoryTabs.map((tab) => (
+          {categoryTabs.filter((t) => t.key !== "all" && t.key !== "external" && t.key !== "internal").map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setCategoryFilter(tab.key)}
-              disabled={tab.count === 0 && tab.key !== "all"}
+              onClick={() => setCategoryFilter(categoryFilter === tab.key ? "all" : tab.key)}
+              disabled={tab.count === 0}
               className={cn(
                 "px-4 py-1 rounded-full text-xs font-medium transition-colors border",
                 categoryFilter === tab.key
                   ? "bg-brand-blue text-white border-brand-blue"
-                  : tab.count === 0 && tab.key !== "all"
+                  : tab.count === 0
                     ? "text-muted/40 border-card-border cursor-default"
                     : "text-muted border-card-border hover:border-muted hover:text-text"
               )}
