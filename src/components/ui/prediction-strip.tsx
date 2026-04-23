@@ -91,7 +91,7 @@ export function PredictionStrip({ prediction, className }: PredictionStripProps)
             <span className="text-xs text-muted block">ROAS</span>
             <span
               className={cn(
-                "text-lg font-bold",
+                "text-sm font-bold",
                 roasValue >= 2
                   ? "text-green-600"
                   : roasValue >= 1
