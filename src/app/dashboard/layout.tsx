@@ -38,6 +38,7 @@ const navigation = [
     items: [
       { name: "Command Center", href: "/dashboard/command-center", icon: LayoutDashboard },
       { name: "Intelligence", href: "/dashboard/intelligence", icon: Radio, highlight: true },
+      { name: "Campaigns", href: "/dashboard/campaigns", icon: Rocket },
       { name: "Flywheel", href: "/dashboard/flywheel", icon: Brain },
       { name: "Optimization Engine", href: "/dashboard/optimization", icon: Zap },
       { name: "Campaign Approval", href: "/dashboard/approval", icon: ClipboardCheck },
@@ -48,7 +49,6 @@ const navigation = [
     label: "CREATIVE & CAMPAIGNS",
     items: [
       { name: "Creative Studio", href: "/dashboard/creative", icon: Palette },
-      { name: "Campaigns", href: "/dashboard/campaigns", icon: Rocket },
       { name: "Wedding & Gifting", href: "/dashboard/wedding", icon: Heart },
       { name: "Retargeting", href: "/dashboard/retargeting", icon: GitBranch },
     ],
