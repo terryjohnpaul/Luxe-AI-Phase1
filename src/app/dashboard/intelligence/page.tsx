@@ -229,7 +229,7 @@ export default function IntelligencePage() {
             selected={selectedTypes}
             onChange={setSelectedTypes}
           />
-          {selectedTypes.size > 0 && (
+          {selectedTypes.size > 0 && selectedTypes.size <= 5 && (
             <div className="flex items-center gap-2 flex-wrap">
               {Array.from(selectedTypes).map((type) => (
                 <span key={type} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue">
@@ -242,7 +242,15 @@ export default function IntelligencePage() {
                 </span>
               ))}
             </div>
-            )}
+          )}
+          {selectedTypes.size > 5 && (
+            <button
+              onClick={() => setSelectedTypes(new Set())}
+              className="text-xs text-brand-blue hover:underline"
+            >
+              Clear {selectedTypes.size} filters
+            </button>
+          )}
           </div>
         </div>
 
@@ -411,10 +419,15 @@ function SignalTypeDropdown({
     const next = new Set(selected);
     if (next.has(key)) next.delete(key);
     else next.add(key);
+    // If all types selected, clear — same as no filter
+    if (next.size >= options.length) {
+      onChange(new Set());
+      return;
+    }
     onChange(next);
   };
 
-  const selectAll = () => onChange(new Set(options.map((o) => o.key)));
+  const selectAll = () => onChange(new Set()); // "Select All" = remove filter = show everything
   const clearAll = () => onChange(new Set());
 
   return (
