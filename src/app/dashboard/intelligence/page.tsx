@@ -147,15 +147,21 @@ export default function IntelligencePage() {
     if (!data) return [];
     return data.signals.filter((s) => {
       if (severityFilter !== "all" && s.severity !== severityFilter) return false;
-      if (categoryFilter !== "all" && s.type !== categoryFilter) return false;
-      return true;
+      if (categoryFilter === "all") return true;
+      if (categoryFilter === "external") return s.signalCategory === "external";
+      if (categoryFilter === "internal") return s.signalCategory === "internal";
+      return s.type === categoryFilter;
     });
   }, [data, severityFilter, categoryFilter]);
 
-  // Category tabs — only show types that have signals
+  // Category tabs — All + External + Internal + each signal type
   const categoryTabs = useMemo(() => {
-    const tabs = [{ key: "all", label: "All", count: data?.signals.length || 0 }];
-    if (!data) return tabs;
+    if (!data) return [{ key: "all", label: "All", count: 0 }];
+    const tabs = [
+      { key: "all", label: "All", count: data.signals.length },
+      { key: "external", label: "External", count: data.externalCount || 0 },
+      { key: "internal", label: "Internal", count: data.internalCount || 0 },
+    ];
     const sorted = Object.entries(categoryCounts).sort((a, b) => b[1] - a[1]);
     sorted.forEach(([type, count]) => {
       tabs.push({ key: type, label: TYPE_LABELS[type] || type, count });
@@ -196,7 +202,7 @@ export default function IntelligencePage() {
               <span className="text-xs font-medium text-muted">LIVE · Updated {timeAgo(data.fetchedAt)}</span>
             </div>
             <h1 className="text-3xl font-bold">Intelligence Feed</h1>
-            <p className="text-xs text-muted mt-1">{data.externalCount || 0} external · {data.internalCount || 0} internal signals</p>
+            <p className="text-xs text-muted mt-1">AI-powered signal intelligence across all sources</p>
           </div>
         </div>
 
@@ -225,30 +231,25 @@ export default function IntelligencePage() {
           })}
         </div>
 
-        {/* Category filter */}
-        <div className="flex items-center gap-1 mb-4 pb-4 border-b border-card-border overflow-x-auto">
-          {categoryTabs.map((tab) => {
-            const iconData = getSignalIcon(tab.key);
-            const Icon = iconData.icon;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setCategoryFilter(tab.key)}
-                disabled={tab.count === 0 && tab.key !== "all"}
-                className={cn(
-                  "flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap shrink-0",
-                  categoryFilter === tab.key
-                    ? "bg-navy text-white"
-                    : tab.count === 0 && tab.key !== "all"
-                      ? "text-muted/40 cursor-default"
-                      : "text-muted hover:bg-surface"
-                )}
-              >
-                <Icon size={12} />
-                {tab.label} ({tab.count})
-              </button>
-            );
-          })}
+        {/* Category filter — wrapping */}
+        <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-card-border">
+          {categoryTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setCategoryFilter(tab.key)}
+              disabled={tab.count === 0 && tab.key !== "all"}
+              className={cn(
+                "px-4 py-1 rounded-full text-xs font-medium transition-colors border",
+                categoryFilter === tab.key
+                  ? "bg-brand-blue text-white border-brand-blue"
+                  : tab.count === 0 && tab.key !== "all"
+                    ? "text-muted/40 border-card-border cursor-default"
+                    : "text-muted border-card-border hover:border-muted hover:text-text"
+              )}
+            >
+              {tab.label}{tab.key === "all" || tab.key === "external" || tab.key === "internal" ? ` (${tab.count})` : ""}
+            </button>
+          ))}
         </div>
 
         {/* Signal rows — compact, expandable */}
