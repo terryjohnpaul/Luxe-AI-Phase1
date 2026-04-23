@@ -614,16 +614,18 @@ function ProfitProbabilityBadge({ prediction }: { prediction: AdRecommendation["
       onMouseEnter={() => setShowTooltip(true)}
       onMouseLeave={() => setShowTooltip(false)}
     >
-      <span
-        className={cn("inline-flex items-center gap-1 px-4 py-1 rounded-full text-xs font-bold border cursor-help", badgeColor)}
-        aria-label={`${pp}% profit probability`}
+      <button
+        onClick={() => setShowTooltip(!showTooltip)}
+        className={cn("inline-flex items-center gap-1 px-4 py-1 rounded-full text-xs font-bold border cursor-help transition-colors", badgeColor)}
+        aria-label={`${pp}% profit probability — click for breakdown`}
+        aria-expanded={showTooltip}
       >
         {pp}% Profit Probability
-      </span>
+      </button>
 
       {/* Tooltip */}
       {showTooltip && breakdown && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-card-border rounded-lg shadow-xl p-4 z-20 dropdown-enter">
+        <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-card-border rounded-lg shadow-2xl p-4 z-50 dropdown-enter">
           <p className="text-xs font-semibold mb-4">PROFIT PROBABILITY BREAKDOWN</p>
 
           {[
