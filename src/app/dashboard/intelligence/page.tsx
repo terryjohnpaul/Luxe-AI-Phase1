@@ -365,7 +365,7 @@ export default function IntelligencePage() {
                     <th className="text-xs text-muted font-medium text-left pb-2 pr-2 w-16"></th>
                     {typeOptions.slice(0, 10).map((opt) => (
                       <th key={opt.key} className="text-xs text-muted font-medium text-center pb-2 px-1 min-w-[48px]">
-                        <span className="block truncate" title={opt.label}>{opt.label.slice(0, 6)}</span>
+                        <span className="block truncate text-[10px]" title={opt.label}>{opt.label}</span>
                       </th>
                     ))}
                   </tr>
@@ -415,7 +415,7 @@ export default function IntelligencePage() {
 
           {/* Signal Trend — bar chart by severity */}
           {signalTrend && (
-            <div className="bg-card border border-card-border rounded-lg p-4">
+            <div className="bg-card border border-card-border rounded-lg p-4 flex flex-col">
               <p className="text-xs font-medium text-muted mb-1">SIGNAL TREND</p>
               <div className="flex items-baseline gap-2 mb-2">
                 <p className="text-sm font-bold">{signalTrend.current}</p>
@@ -423,7 +423,8 @@ export default function IntelligencePage() {
                   {signalTrend.up ? "↑" : "↓"} {Math.abs(signalTrend.pct)}%
                 </span>
               </div>
-              <ResponsiveContainer width="100%" height={100}>
+              <div className="flex-1 min-h-[80px]">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={[
                   { name: "Critical", value: severityCounts.critical, fill: "#dc2626" },
                   { name: "High", value: severityCounts.high, fill: "#ea580c" },
@@ -443,15 +444,16 @@ export default function IntelligencePage() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
-              <p className="text-xs text-muted mt-1">{signalTrend.newCritical} critical active now</p>
+              </div>
+              <p className="text-xs text-muted mt-2">{signalTrend.newCritical} critical active now</p>
             </div>
           )}
 
           {/* Category Insight — donut chart */}
           {categoryInsight && (
-            <div className="bg-card border border-card-border rounded-lg p-4">
+            <div className="bg-card border border-card-border rounded-lg p-4 flex flex-col">
               <p className="text-xs font-medium text-muted mb-1">CATEGORY INSIGHT</p>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-1">
                 <ResponsiveContainer width={100} height={100}>
                   <PieChart>
                     <Pie
