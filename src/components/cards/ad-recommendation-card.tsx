@@ -1235,7 +1235,7 @@ function GuideBlock({ title, borderColor, content, copyKey, copiedText, onCopy }
           <Copy size={12} /> {copiedText === copyKey ? "Copied!" : "Copy steps"}
         </button>
       </div>
-      <div className={cn("bg-white rounded-lg border border-card-border overflow-hidden border-l-4", borderColor)}>
+      <div className="bg-white rounded-lg border border-card-border overflow-hidden">
         {steps.map((step, i) => (
           <div
             key={i}
