@@ -349,46 +349,67 @@ export default function IntelligencePage() {
 
         {/* Row 2: Signal Heatmap + Trend + Category Insight */}
         <div className="grid grid-cols-[2fr_1fr_1fr] gap-4 mb-4">
-          {/* Signal Heatmap / Pulse */}
+          {/* Signal Heatmap — severity × type grid */}
           <div className="bg-card border border-card-border rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-medium text-muted">SIGNAL HEATMAP</p>
               {signalPulse.stacking && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium animate-pulse">Stacking Active</span>
               )}
             </div>
-            <div className="flex flex-wrap gap-1">
-              {typeOptions.map((opt) => {
-                const maxCount = typeOptions[0]?.count || 1;
-                const intensity = opt.count / maxCount;
-                const highSevCount = data.signals.filter((s) => s.type === opt.key && (s.severity === "critical" || s.severity === "high")).length;
-                const hasHighSev = highSevCount > 0;
-                return (
-                  <button
-                    key={opt.key}
-                    onClick={() => setSelectedTypes((prev) => {
-                      const n = new Set(prev);
-                      if (n.has(opt.key)) n.delete(opt.key); else n.add(opt.key);
-                      if (n.size >= typeOptions.length) return new Set();
-                      return n;
-                    })}
-                    className={cn(
-                      "px-2 py-1 rounded text-xs font-medium transition-all",
-                      selectedTypes.has(opt.key) && "ring-2 ring-brand-blue",
-                      intensity >= 0.7 ? "bg-red-100 text-red-800" :
-                      intensity >= 0.4 ? "bg-orange-100 text-orange-800" :
-                      intensity >= 0.2 ? "bg-amber-50 text-amber-800" :
-                      "bg-gray-50 text-gray-600"
-                    )}
-                    title={`${opt.label}: ${opt.count} signals (${highSevCount} high-severity)`}
-                  >
-                    {opt.label}
-                    <span className="ml-1 opacity-70">{opt.count}</span>
-                  </button>
-                );
-              })}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr>
+                    <th className="text-xs text-muted font-medium text-left pb-2 pr-2 w-16"></th>
+                    {typeOptions.slice(0, 10).map((opt) => (
+                      <th key={opt.key} className="text-xs text-muted font-medium text-center pb-2 px-1 min-w-[48px]">
+                        <span className="block truncate" title={opt.label}>{opt.label.slice(0, 6)}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(["critical", "high", "medium", "low"] as const).map((sev) => (
+                    <tr key={sev}>
+                      <td className="text-xs text-muted font-medium pr-2 py-1 capitalize">{sev}</td>
+                      {typeOptions.slice(0, 10).map((opt) => {
+                        const count = data.signals.filter((s) => s.type === opt.key && s.severity === sev).length;
+                        const maxCell = Math.max(...typeOptions.slice(0, 10).map((o) =>
+                          Math.max(...(["critical", "high", "medium", "low"] as const).map((sv) =>
+                            data.signals.filter((s) => s.type === o.key && s.severity === sv).length
+                          ))
+                        ));
+                        const intensity = maxCell > 0 ? count / maxCell : 0;
+                        return (
+                          <td key={opt.key} className="px-1 py-1">
+                            <button
+                              onClick={() => {
+                                setSeverityFilter(sev);
+                                setSelectedTypes(new Set([opt.key]));
+                              }}
+                              className={cn(
+                                "w-full h-8 rounded text-xs font-semibold transition-all hover:ring-2 hover:ring-brand-blue",
+                                count === 0 ? "bg-gray-50 text-transparent" :
+                                intensity >= 0.8 ? "bg-red-500 text-white" :
+                                intensity >= 0.5 ? "bg-orange-400 text-white" :
+                                intensity >= 0.3 ? "bg-amber-300 text-amber-900" :
+                                intensity >= 0.1 ? "bg-amber-100 text-amber-700" :
+                                "bg-gray-100 text-gray-500"
+                              )}
+                              title={`${opt.label} × ${sev}: ${count} signals`}
+                            >
+                              {count > 0 ? count : ""}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <p className="text-xs text-muted mt-2">{signalPulse.count} high-severity across {signalPulse.activeTypes.length} types</p>
+            <p className="text-xs text-muted mt-2">{signalPulse.count} high-severity across {signalPulse.activeTypes.length} types · Click any cell to filter</p>
           </div>
 
           {/* Signal Trend */}
