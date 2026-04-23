@@ -453,18 +453,18 @@ export default function IntelligencePage() {
           {categoryInsight && (
             <div className="bg-card border border-card-border rounded-lg p-4 flex flex-col">
               <p className="text-xs font-medium text-muted mb-1">CATEGORY INSIGHT</p>
-              <div className="flex items-center gap-4 flex-1">
-                <ResponsiveContainer width={100} height={100}>
+              <div className="flex-1 flex flex-col items-center">
+                <ResponsiveContainer width="100%" height={140}>
                   <PieChart>
                     <Pie
-                      data={typeOptions.slice(0, 6).map((opt, i) => ({
+                      data={typeOptions.slice(0, 6).map((opt) => ({
                         name: opt.label,
                         value: opt.count,
                       }))}
                       cx="50%"
                       cy="50%"
-                      innerRadius={28}
-                      outerRadius={45}
+                      innerRadius={40}
+                      outerRadius={65}
                       dataKey="value"
                       strokeWidth={1}
                     >
@@ -475,10 +475,10 @@ export default function IntelligencePage() {
                     <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="space-y-1">
-                  {typeOptions.slice(0, 5).map((opt, i) => (
-                    <div key={opt.key} className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ["#2563eb", "#7c3aed", "#ea580c", "#16a34a", "#eab308"][i] }} />
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-2">
+                  {typeOptions.slice(0, 6).map((opt, i) => (
+                    <div key={opt.key} className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ["#2563eb", "#7c3aed", "#ea580c", "#16a34a", "#eab308", "#64748b"][i] }} />
                       <span className="text-xs text-muted">{opt.label}</span>
                       <span className="text-xs font-semibold">{opt.count}</span>
                     </div>
