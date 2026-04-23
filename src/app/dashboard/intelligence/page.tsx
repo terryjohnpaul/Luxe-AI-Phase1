@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import {
-  Radio, MapPin, Clock, Loader2,
+  Radio, MapPin, Clock, Loader2, AlertTriangle,
   ThermometerSun, Trophy, Heart, PartyPopper,
   Briefcase, Gift, Monitor, TrendingUp,
   DollarSign, ShoppingBag, Flame, Package, Sparkles,
@@ -204,6 +204,28 @@ export default function IntelligencePage() {
       .map(([type, count]) => ({ key: type, label: TYPE_LABELS[type] || type, count }));
   }, [data, categoryCounts]);
 
+  // Intelligence: Expiring signals (< 24h)
+  const expiringSoon = useMemo(() => {
+    if (!data) return [];
+    const cutoff = Date.now() + 24 * 60 * 60 * 1000;
+    return data.signals.filter((s) => new Date(s.expiresAt).getTime() < cutoff && new Date(s.expiresAt).getTime() > Date.now());
+  }, [data]);
+
+  // Intelligence: Top 3 actions — sorted by severity rank, then confidence, then expiry urgency
+  const top3Actions = useMemo(() => {
+    if (!data) return [];
+    const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    return [...data.signals]
+      .sort((a, b) => {
+        const sevDiff = (sevRank[a.severity] ?? 3) - (sevRank[b.severity] ?? 3);
+        if (sevDiff !== 0) return sevDiff;
+        const confDiff = b.confidence - a.confidence;
+        if (Math.abs(confDiff) > 0.05) return confDiff;
+        return new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime();
+      })
+      .slice(0, 3);
+  }, [data]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
@@ -240,6 +262,54 @@ export default function IntelligencePage() {
             <p className="text-xs text-muted mt-1">{data.signals.length} signals{data.sources ? ` from ${Object.keys(data.sources).length} sources` : ""}</p>
           </div>
         </div>
+
+        {/* ── Intelligence Layer ── */}
+
+        {/* Expiring Soon Banner */}
+        {expiringSoon.length > 0 && (
+          <div className="flex items-center justify-between px-4 py-2 mb-4 rounded-lg border border-amber-200 bg-amber-50">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={14} className="text-amber-600" />
+              <span className="text-xs font-medium text-amber-800">
+                {expiringSoon.length} signal{expiringSoon.length > 1 ? "s" : ""} expire{expiringSoon.length === 1 ? "s" : ""} in &lt; 24 hours
+              </span>
+            </div>
+            <button
+              onClick={() => { setSeverityFilter("all"); setSelectedTypes(new Set()); }}
+              className="text-xs text-amber-700 hover:underline font-medium"
+            >
+              View expiring
+            </button>
+          </div>
+        )}
+
+        {/* Top 3 Actions */}
+        {top3Actions.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Top Actions Right Now</p>
+            <div className="grid grid-cols-3 gap-4">
+              {top3Actions.map((signal, i) => (
+                <button
+                  key={signal.id}
+                  onClick={() => setExpandedId(expandedId === signal.id ? null : signal.id)}
+                  className="bg-card border border-card-border rounded-lg p-4 text-left hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-bold text-brand-blue">#{i + 1}</span>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded text-xs font-medium",
+                      signal.severity === "critical" ? "bg-red-100 text-red-700" : "bg-orange-100 text-orange-700"
+                    )}>
+                      {signal.severity.charAt(0).toUpperCase() + signal.severity.slice(1)}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold mb-1 line-clamp-1">{signal.title}</p>
+                  <p className="text-xs text-muted line-clamp-2">{signal.suggestedAction}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Severity + Signal Type dropdown on same row */}
         <div className="flex items-center justify-between mb-4 pb-4 border-b border-card-border">
