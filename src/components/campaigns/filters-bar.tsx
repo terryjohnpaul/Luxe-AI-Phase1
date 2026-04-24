@@ -49,15 +49,15 @@ export function FiltersBar({
   onSort,
 }: FiltersBarProps) {
   return (
-    <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b border-card-border">
+    <div className="flex items-center gap-2 mb-4 pb-4 border-b border-card-border">
       {/* Platform filter */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 shrink-0">
         {PLATFORM_FILTERS.map((f) => (
           <button
             key={f.key}
             onClick={() => onPlatformChange(f.key)}
             className={cn(
-              "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+              "px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
               platformFilter === f.key
                 ? "bg-navy text-white"
                 : "text-muted hover:bg-surface"
@@ -68,14 +68,17 @@ export function FiltersBar({
         ))}
       </div>
 
+      {/* Divider */}
+      <div className="h-5 border-l border-card-border shrink-0" />
+
       {/* Date range */}
-      <div className="flex items-center gap-1 bg-surface rounded-lg p-0.5">
+      <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5 shrink-0">
         {DATE_RANGES.map((d) => (
           <button
             key={d.key}
             onClick={() => onDateRangeChange(d.key)}
             className={cn(
-              "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+              "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
               dateRange === d.key
                 ? "bg-white text-brand-blue shadow-sm"
                 : "text-muted hover:text-text"
@@ -87,25 +90,25 @@ export function FiltersBar({
       </div>
 
       {/* Search */}
-      <div className="flex-1 min-w-[200px] max-w-sm relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+      <div className="flex-1 min-w-[140px] max-w-[220px] relative">
+        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
         <input
           type="text"
           value={searchInput}
           onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search campaigns..."
-          className="w-full bg-white border border-card-border rounded-lg pl-9 pr-3 py-2 text-xs text-text placeholder-muted focus:outline-none focus:ring-1 focus:ring-brand-blue"
+          placeholder="Search..."
+          className="w-full bg-white border border-card-border rounded-lg pl-7 pr-2 py-1.5 text-xs text-text placeholder-muted focus:outline-none focus:ring-1 focus:ring-brand-blue"
         />
       </div>
 
       {/* Sort buttons */}
-      <div className="flex gap-1.5 ml-auto">
+      <div className="flex gap-1 ml-auto shrink-0">
         {SORT_OPTIONS.map(({ label, col }) => (
           <button
             key={col}
             onClick={() => onSort(col)}
             className={cn(
-              "text-xs px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors border",
+              "text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-colors border whitespace-nowrap",
               sortBy === col
                 ? "bg-brand-blue/10 text-brand-blue border-brand-blue/20 font-medium"
                 : "text-muted hover:text-text hover:bg-surface border-card-border"
