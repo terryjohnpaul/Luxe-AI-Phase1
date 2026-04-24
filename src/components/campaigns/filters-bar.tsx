@@ -49,7 +49,7 @@ export function FiltersBar({
   onSort,
 }: FiltersBarProps) {
   return (
-    <div className="flex flex-wrap gap-3 items-center mb-4 pb-4 border-b border-card-border">
+    <div className="flex flex-wrap gap-2 items-center mb-4 pb-4 border-b border-card-border">
       {/* Platform filter */}
       <div className="flex items-center gap-1">
         {PLATFORM_FILTERS.map((f) => (
@@ -57,7 +57,7 @@ export function FiltersBar({
             key={f.key}
             onClick={() => onPlatformChange(f.key)}
             className={cn(
-              "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
+              "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
               platformFilter === f.key
                 ? "bg-navy text-white"
                 : "text-muted hover:bg-surface"

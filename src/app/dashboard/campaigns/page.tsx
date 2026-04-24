@@ -295,11 +295,31 @@ function CampaignsContent() {
   // ── Computed: health groups + aggregate stats ──
   const campaigns = data?.campaigns || [];
   const stats = data?.stats;
+  const isDemo = stats?.accountName?.includes("Demo") || false;
 
   const filteredCampaigns = useMemo(() => {
-    if (platformFilter === "all") return campaigns;
-    return campaigns.filter((c) => c.platform === platformFilter);
-  }, [campaigns, platformFilter]);
+    let result = campaigns;
+
+    // Platform filter
+    if (platformFilter !== "all") {
+      result = result.filter((c) => c.platform === platformFilter);
+    }
+
+    // Client-side search
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter((c) => c.name.toLowerCase().includes(q));
+    }
+
+    // Client-side sort
+    result = [...result].sort((a, b) => {
+      const aVal = (a.metrics as any)?.[sortBy] || 0;
+      const bVal = (b.metrics as any)?.[sortBy] || 0;
+      return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+    });
+
+    return result;
+  }, [campaigns, platformFilter, search, sortBy, sortDir]);
 
   const aggregateStats = useMemo(() => computeAggregateStats(filteredCampaigns), [filteredCampaigns]);
   const healthGroups = useMemo(() => classifyCampaigns(filteredCampaigns), [filteredCampaigns]);
@@ -631,7 +651,7 @@ function CampaignsContent() {
           title="Campaigns"
           description={
             stats
-              ? `${stats.accountName || "Meta Ads"} · ${stats.active} active campaigns · Live data`
+              ? `${stats.accountName || "Meta Ads"} · ${stats.active} active campaigns${isDemo ? "" : " · Live data"}`
               : "Loading..."
           }
           actions={
@@ -654,6 +674,12 @@ function CampaignsContent() {
                     </button>
                   ))}
                 </div>
+              )}
+
+              {isDemo && (
+                <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">
+                  Demo Mode
+                </span>
               )}
 
               <button

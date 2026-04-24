@@ -13,38 +13,38 @@ interface HealthBoardProps {
 
 const LANE_CONFIG: Record<HealthLane, {
   icon: typeof AlertTriangle;
-  borderColor: string;
   headerBg: string;
   headerText: string;
   countBg: string;
+  hint: string;
 }> = {
   needs_attention: {
     icon: AlertTriangle,
-    borderColor: "border-l-red-500",
     headerBg: "bg-red-50",
     headerText: "text-red-800",
     countBg: "bg-red-100 text-red-700",
+    hint: "Consider pausing or reducing budget on these campaigns",
   },
   top_performers: {
     icon: TrendingUp,
-    borderColor: "border-l-green-500",
     headerBg: "bg-green-50",
     headerText: "text-green-800",
     countBg: "bg-green-100 text-green-700",
+    hint: "Scale these — increase budget to capture more conversions",
   },
   monitoring: {
     icon: Eye,
-    borderColor: "border-l-amber-500",
     headerBg: "bg-amber-50",
     headerText: "text-amber-800",
     countBg: "bg-amber-100 text-amber-700",
+    hint: "Watch closely — mixed signals, may need optimization",
   },
   paused: {
     icon: Pause,
-    borderColor: "border-l-gray-400",
     headerBg: "bg-gray-50",
     headerText: "text-gray-700",
     countBg: "bg-gray-200 text-gray-600",
+    hint: "Review to reactivate or archive",
   },
 };
 
@@ -76,36 +76,41 @@ function HealthLaneSection({
       <button
         onClick={() => setCollapsed(!collapsed)}
         className={cn(
-          "w-full flex items-center justify-between px-4 py-3 rounded-t-lg transition-colors",
+          "w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors",
           config.headerBg,
           "hover:opacity-90"
         )}
       >
-        <div className="flex items-center gap-2">
-          <Icon size={16} className={config.headerText} />
-          <span className={cn("text-sm font-semibold", config.headerText)}>
-            {group.label}
-          </span>
-          <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", config.countBg)}>
-            {group.campaigns.length}
-          </span>
-          {group.totalSpend > 0 && (
-            <span className="text-xs text-muted ml-2">
-              {fmtINR(group.totalSpend)} spend
+        <div className="flex flex-col items-start gap-0.5">
+          <div className="flex items-center gap-2">
+            <Icon size={16} className={config.headerText} />
+            <span className={cn("text-sm font-semibold", config.headerText)}>
+              {group.label}
             </span>
-          )}
+            <span className={cn("text-xs px-2 py-0.5 rounded-full font-medium", config.countBg)}>
+              {group.campaigns.length}
+            </span>
+            {group.totalSpend > 0 && (
+              <span className="text-xs text-muted ml-2">
+                {fmtINR(group.totalSpend)} spend
+              </span>
+            )}
+          </div>
+          <span className="text-xs text-muted pl-6">{config.hint}</span>
         </div>
         {collapsed ? (
-          <ChevronRight size={16} className="text-muted" />
+          <ChevronRight size={16} className="text-muted shrink-0" />
         ) : (
-          <ChevronDown size={16} className="text-muted" />
+          <ChevronDown size={16} className="text-muted shrink-0" />
         )}
       </button>
 
       {!collapsed && (
-        <div className="space-y-3 p-3">
-          {group.campaigns.map((c) => (
-            <div key={c.id}>{renderCard(c.id)}</div>
+        <div className="space-y-3 pt-3">
+          {group.campaigns.map((c, i) => (
+            <div key={c.id} className="card-enter" style={{ animationDelay: `${i * 60}ms` }}>
+              {renderCard(c.id)}
+            </div>
           ))}
         </div>
       )}
