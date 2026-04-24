@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { Play, Pause, Pencil, Brain, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { fmtINR, fmtNum, fmtROAS, fmtPct, safe } from "@/lib/campaigns/formatters";
+import { fmtINR, fmtNum, fmtROAS, fmtPct, safe, humanizeCampaignName } from "@/lib/campaigns/formatters";
 import type { Campaign } from "@/lib/campaigns/health";
 
 interface CampaignCardProps {
   campaign: Campaign;
   healthDot: "red" | "amber" | "green" | "gray";
+  avgCPA: number;
   currentAccountId: string;
   isEditing: boolean;
   isAnalyzing: boolean;
@@ -18,9 +19,17 @@ interface CampaignCardProps {
   analyzePanel?: React.ReactNode;
 }
 
+const DOT_TOOLTIPS: Record<string, string> = {
+  red: "Needs attention — ROAS below 1.0x or CPA too high",
+  amber: "Monitoring — performance is acceptable but not strong",
+  green: "Top performer — ROAS above 3.0x",
+  gray: "Paused",
+};
+
 export function CampaignCard({
   campaign: c,
   healthDot,
+  avgCPA,
   currentAccountId,
   isEditing,
   isAnalyzing,
@@ -38,25 +47,49 @@ export function CampaignCard({
     gray: "bg-gray-400",
   };
 
+  // ROAS color
+  const roas = safe(c.metrics?.roas);
   const roasColor =
-    safe(c.metrics?.roas) >= 3
-      ? "text-green-700"
-      : safe(c.metrics?.roas) >= 1
-      ? "text-amber-700"
-      : safe(c.metrics?.roas) > 0
-      ? "text-red-700"
-      : "text-muted";
+    roas >= 3 ? "text-green-700" :
+    roas >= 1 ? "text-amber-700" :
+    roas > 0 ? "text-red-700" :
+    "text-muted";
+
+  // CPA color (relative to average)
+  const cpa = safe(c.metrics?.cpa);
+  const cpaColor =
+    cpa <= 0 ? "text-muted" :
+    avgCPA <= 0 ? "text-text" :
+    cpa <= avgCPA ? "text-green-700" :
+    cpa <= avgCPA * 2 ? "text-amber-700" :
+    "text-red-700";
+
+  // Health dot tooltip with actual values
+  const dotTooltip = healthDot === "red"
+    ? `Needs attention — ROAS ${fmtROAS(roas)} (below 1.0x)`
+    : healthDot === "green"
+    ? `Top performer — ROAS ${fmtROAS(roas)} (above 3.0x)`
+    : healthDot === "gray"
+    ? "Paused"
+    : `Monitoring — ROAS ${fmtROAS(roas)}`;
 
   const platformLink =
     c.platform === "META"
       ? `https://www.facebook.com/adsmanager/manage/campaigns?act=${currentAccountId}&campaign_ids=${c.id}`
       : `https://ads.google.com/aw/campaigns?campaignId=${c.id}`;
 
+  const displayName = humanizeCampaignName(c.name);
+
   return (
-    <article className="glass-card p-4 transition-all duration-200 card-enter hover:shadow-md">
+    <article className="glass-card p-4 transition-all duration-200 hover:shadow-md">
       {/* Row 1: Badges + name */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColors[healthDot])} />
+        {/* Health dot with tooltip */}
+        <span
+          className={cn("w-2.5 h-2.5 rounded-full shrink-0 cursor-help", dotColors[healthDot])}
+          title={dotTooltip}
+        />
+
         <span
           className={cn(
             "text-xs px-2 py-0.5 rounded font-medium border",
@@ -83,53 +116,58 @@ export function CampaignCard({
           {c.status === "ACTIVE" ? <Play size={8} /> : <Pause size={8} />}
           {c.status}
         </span>
-        <span className="text-sm font-semibold text-text ml-1 break-all leading-snug">
-          {c.name || "--"}
+
+        {/* Humanized name with raw slug on hover */}
+        <span
+          className="text-sm font-semibold text-text ml-1 leading-snug"
+          title={c.name}
+        >
+          {displayName}
         </span>
       </div>
 
       {/* Row 2: 3 Hero Metrics */}
       <div className="flex flex-wrap gap-x-8 gap-y-2">
         <div>
-          <p className="text-xs text-muted">Spend</p>
-          <p className="font-mono text-sm font-semibold">
+          <p className="text-xs text-muted mb-0.5">Spend</p>
+          <p className="text-base font-semibold tabular-nums tracking-tight">
             {safe(c.metrics?.spend) > 0 ? fmtINR(safe(c.metrics.spend)) : "--"}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted">ROAS</p>
-          <p className={cn("font-mono text-sm font-semibold", roasColor)}>
-            {safe(c.metrics?.roas) > 0 ? fmtROAS(safe(c.metrics.roas)) : "--"}
+          <p className="text-xs text-muted mb-0.5">ROAS</p>
+          <p className={cn("text-base font-semibold tabular-nums tracking-tight", roasColor)}>
+            {roas > 0 ? fmtROAS(roas) : "--"}
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted">CPA</p>
-          <p className="font-mono text-sm font-semibold">
-            {safe(c.metrics?.cpa) > 0 ? fmtINR(safe(c.metrics.cpa)) : "--"}
+          <p className="text-xs text-muted mb-0.5">CPA</p>
+          <p className={cn("text-base font-semibold tabular-nums tracking-tight", cpaColor)}>
+            {cpa > 0 ? fmtINR(cpa) : "--"}
           </p>
         </div>
 
         {expanded && (
           <>
             <div>
-              <p className="text-xs text-muted">Conversions</p>
-              <p className="font-mono text-sm">{safe(c.metrics?.conversions) > 0 ? fmtNum(safe(c.metrics.conversions)) : "--"}</p>
+              <p className="text-xs text-muted mb-0.5">Conversions</p>
+              <p className="text-sm tabular-nums">{safe(c.metrics?.conversions) > 0 ? fmtNum(safe(c.metrics.conversions)) : "--"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted">CTR</p>
-              <p className="font-mono text-sm">{safe(c.metrics?.ctr) > 0 ? fmtPct(safe(c.metrics.ctr)) : "--"}</p>
+              <p className="text-xs text-muted mb-0.5">CTR</p>
+              <p className="text-sm tabular-nums">{safe(c.metrics?.ctr) > 0 ? fmtPct(safe(c.metrics.ctr)) : "--"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted">Impressions</p>
-              <p className="font-mono text-sm">{safe(c.metrics?.impressions) > 0 ? fmtNum(safe(c.metrics.impressions)) : "--"}</p>
+              <p className="text-xs text-muted mb-0.5">Impressions</p>
+              <p className="text-sm tabular-nums">{safe(c.metrics?.impressions) > 0 ? fmtNum(safe(c.metrics.impressions)) : "--"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted">Clicks</p>
-              <p className="font-mono text-sm">{safe(c.metrics?.clicks) > 0 ? fmtNum(safe(c.metrics.clicks)) : "--"}</p>
+              <p className="text-xs text-muted mb-0.5">Clicks</p>
+              <p className="text-sm tabular-nums">{safe(c.metrics?.clicks) > 0 ? fmtNum(safe(c.metrics.clicks)) : "--"}</p>
             </div>
             <div>
-              <p className="text-xs text-muted">Daily Budget</p>
-              <p className="font-mono text-sm">{c.dailyBudget > 0 ? fmtINR(c.dailyBudget) : "--"}</p>
+              <p className="text-xs text-muted mb-0.5">Daily Budget</p>
+              <p className="text-sm tabular-nums">{c.dailyBudget > 0 ? fmtINR(c.dailyBudget) : "--"}</p>
             </div>
           </>
         )}
@@ -142,7 +180,7 @@ export function CampaignCard({
           className="flex items-center gap-1 text-xs text-muted hover:text-text transition-colors"
         >
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          {expanded ? "Less" : "More"}
+          {expanded ? "All Metrics" : "All Metrics"}
         </button>
         <button
           onClick={() => onToggleEdit(c)}
@@ -168,11 +206,15 @@ export function CampaignCard({
           <Brain size={11} />
           AI Analyze
         </button>
+
+        {/* Divider */}
+        <div className="h-5 border-l border-card-border ml-auto" />
+
         <a
           href={platformLink}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs px-3 py-1.5 rounded-lg text-muted hover:text-text hover:bg-surface flex items-center gap-1.5 ml-auto transition-colors border border-card-border"
+          className="text-xs px-3 py-1.5 rounded-lg text-muted hover:text-text hover:bg-surface flex items-center gap-1.5 transition-colors border border-card-border"
         >
           Open in {c.platform === "META" ? "Meta" : "Google"}
           <ExternalLink size={10} />

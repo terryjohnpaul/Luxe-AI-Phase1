@@ -594,6 +594,7 @@ function CampaignsContent() {
       <CampaignCard
         campaign={c}
         healthDot={dot}
+        avgCPA={aggregateStats.avgCPA}
         currentAccountId={currentAccountId}
         isEditing={editingId === c.id}
         isAnalyzing={analyzingId === c.id}
