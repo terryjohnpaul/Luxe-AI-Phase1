@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Loader2, AlertTriangle, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { RefreshCw, Loader2, AlertTriangle, Search, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { PageHeader } from "@/components/ui/page-header";
 import { ToastProvider, showToast } from "@/components/ui/toast";
@@ -11,8 +11,10 @@ import { CampaignCard } from "@/components/campaigns/campaign-card";
 import { HealthBoard } from "@/components/campaigns/health-board";
 import { CampaignEditPanel, type EditFields, type AdSetData, type AdData, type AdSetEditFields, type AdEditFields } from "@/components/campaigns/campaign-edit-panel";
 import { CampaignAnalyzePanel } from "@/components/campaigns/campaign-analyze-panel";
+import { CampaignSidebar, SidebarSection } from "@/components/campaigns/campaign-sidebar";
+import { BudgetPacing } from "@/components/campaigns/budget-pacing";
 import { type Campaign, computeAggregateStats, classifyCampaigns, getHealthDot } from "@/lib/campaigns/health";
-import { safe } from "@/lib/campaigns/formatters";
+import { safe, fmtINR, fmtROAS } from "@/lib/campaigns/formatters";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -309,6 +311,56 @@ function CampaignsContent() {
   }, [campaigns]);
 
   const currentAccountId = accounts.find((a) => a.id === selectedAccount)?.accountId || stats?.accountId || "";
+
+  // ── Platform split ──
+  const platformSplit = useMemo(() => {
+    const meta = campaigns.filter((c) => c.platform === "META");
+    const google = campaigns.filter((c) => c.platform === "GOOGLE");
+    const metaSpend = meta.reduce((s, c) => s + (c.metrics?.spend || 0), 0);
+    const googleSpend = google.reduce((s, c) => s + (c.metrics?.spend || 0), 0);
+    const metaRevenue = meta.reduce((s, c) => s + (c.metrics?.conversionValue || 0), 0);
+    const googleRevenue = google.reduce((s, c) => s + (c.metrics?.conversionValue || 0), 0);
+    const metaConv = meta.reduce((s, c) => s + (c.metrics?.conversions || 0), 0);
+    const googleConv = google.reduce((s, c) => s + (c.metrics?.conversions || 0), 0);
+    const total = metaSpend + googleSpend;
+    return {
+      meta: { spend: metaSpend, roas: metaSpend > 0 ? metaRevenue / metaSpend : 0, conversions: metaConv, pct: total > 0 ? (metaSpend / total) * 100 : 0 },
+      google: { spend: googleSpend, roas: googleSpend > 0 ? googleRevenue / googleSpend : 0, conversions: googleConv, pct: total > 0 ? (googleSpend / total) * 100 : 0 },
+    };
+  }, [campaigns]);
+
+  // ── Top brands (parsed from campaign names) ──
+  const topBrands = useMemo(() => {
+    const brandKeywords: Record<string, string[]> = {
+      "Hugo Boss": ["hugo", "boss"],
+      "Coach": ["coach"],
+      "Michael Kors": ["michael_kors", "mk", "michael kors"],
+      "Fossil": ["fossil"],
+      "Swarovski": ["swarovski"],
+      "Tissot": ["tissot"],
+      "Armani": ["armani"],
+      "Calvin Klein": ["calvin", "ck"],
+      "Tommy Hilfiger": ["tommy", "hilfiger"],
+      "Ralph Lauren": ["ralph", "lauren"],
+    };
+    const brandData: Record<string, { spend: number; revenue: number; conversions: number }> = {};
+    for (const c of campaigns) {
+      const nameLower = c.name.toLowerCase();
+      for (const [brand, keywords] of Object.entries(brandKeywords)) {
+        if (keywords.some((kw) => nameLower.includes(kw))) {
+          if (!brandData[brand]) brandData[brand] = { spend: 0, revenue: 0, conversions: 0 };
+          brandData[brand].spend += c.metrics?.spend || 0;
+          brandData[brand].revenue += c.metrics?.conversionValue || 0;
+          brandData[brand].conversions += c.metrics?.conversions || 0;
+        }
+      }
+    }
+    return Object.entries(brandData)
+      .map(([name, d]) => ({ name, spend: d.spend, roas: d.spend > 0 ? d.revenue / d.spend : 0, conversions: d.conversions }))
+      .filter((b) => b.spend > 0)
+      .sort((a, b) => b.spend - a.spend)
+      .slice(0, 5);
+  }, [campaigns]);
 
   // ── Edit handlers ──
   const toggleEdit = (c: Campaign) => {
@@ -616,91 +668,245 @@ function CampaignsContent() {
           }
         />
 
-        {/* Performance Pulse */}
-        {data && <PerformancePulse stats={aggregateStats} />}
+        {/* Two-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+          {/* ── Main Column ── */}
+          <div>
+            {/* Performance Pulse */}
+            {data && <PerformancePulse stats={aggregateStats} />}
 
-        {/* Filters */}
-        <FiltersBar
-          platformFilter={platformFilter}
-          onPlatformChange={(p) => { setPlatformFilter(p); setPage(1); }}
-          dateRange={dateRange}
-          onDateRangeChange={(r) => { setDateRange(r); setPage(1); }}
-          searchInput={searchInput}
-          onSearchChange={setSearchInput}
-          sortBy={sortBy}
-          sortDir={sortDir}
-          onSort={handleSort}
-        />
+            {/* Filters */}
+            <FiltersBar
+              platformFilter={platformFilter}
+              onPlatformChange={(p) => { setPlatformFilter(p); setPage(1); }}
+              dateRange={dateRange}
+              onDateRangeChange={(r) => { setDateRange(r); setPage(1); }}
+              searchInput={searchInput}
+              onSearchChange={setSearchInput}
+              sortBy={sortBy}
+              sortDir={sortDir}
+              onSort={handleSort}
+            />
 
-        {/* Content */}
-        {loading && !data ? (
-          <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((i) => <CardSkeleton key={i} />)}
-          </div>
-        ) : error && !data ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <AlertTriangle size={40} className="text-brand-red mb-4" />
-            <h2 className="text-lg font-semibold mb-2">Failed to load campaigns</h2>
-            <p className="text-sm text-muted mb-4">{error}</p>
-            <button onClick={fetchData} className="btn-primary">Retry</button>
-          </div>
-        ) : filteredCampaigns.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <Search size={40} className="text-muted mb-4" />
-            <h2 className="text-lg font-semibold mb-2">No campaigns found</h2>
-            <p className="text-sm text-muted">Try adjusting your filters or search.</p>
-          </div>
-        ) : (
-          <HealthBoard groups={healthGroups} renderCard={renderCard} />
-        )}
+            {/* Content */}
+            {loading && !data ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => <CardSkeleton key={i} />)}
+              </div>
+            ) : error && !data ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <AlertTriangle size={40} className="text-brand-red mb-4" />
+                <h2 className="text-lg font-semibold mb-2">Failed to load campaigns</h2>
+                <p className="text-sm text-muted mb-4">{error}</p>
+                <button onClick={fetchData} className="btn-primary">Retry</button>
+              </div>
+            ) : filteredCampaigns.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <Search size={40} className="text-muted mb-4" />
+                <h2 className="text-lg font-semibold mb-2">No campaigns found</h2>
+                <p className="text-sm text-muted">Try adjusting your filters or search.</p>
+              </div>
+            ) : (
+              <HealthBoard groups={healthGroups} renderCard={renderCard} />
+            )}
 
-        {/* Pagination */}
-        {stats && stats.totalPages > 1 && (
-          <div className="flex items-center justify-between pt-6">
-            <p className="text-xs text-muted">Page {page} of {stats.totalPages}</p>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1 || loading}
-                className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors",
-                  page <= 1 ? "text-muted/40 cursor-not-allowed" : "text-muted hover:bg-surface"
-                )}
-              >
-                <ChevronLeft size={14} /> Prev
-              </button>
-              {Array.from({ length: Math.min(7, stats.totalPages) }, (_, i) => {
-                let pn: number;
-                if (stats.totalPages <= 7) pn = i + 1;
-                else if (page <= 4) pn = i + 1;
-                else if (page >= stats.totalPages - 3) pn = stats.totalPages - 6 + i;
-                else pn = page - 3 + i;
-                return (
+            {/* Pagination */}
+            {stats && stats.totalPages > 1 && (
+              <div className="flex items-center justify-between pt-6">
+                <p className="text-xs text-muted">Page {page} of {stats.totalPages}</p>
+                <div className="flex items-center gap-1">
                   <button
-                    key={pn}
-                    onClick={() => setPage(pn)}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1 || loading}
                     className={cn(
-                      "w-8 h-8 rounded-lg text-xs transition-colors",
-                      page === pn ? "bg-navy text-white font-bold" : "text-muted hover:bg-surface"
+                      "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors",
+                      page <= 1 ? "text-muted/40 cursor-not-allowed" : "text-muted hover:bg-surface"
                     )}
                   >
-                    {pn}
+                    <ChevronLeft size={14} /> Prev
                   </button>
-                );
-              })}
-              <button
-                onClick={() => setPage((p) => Math.min(stats.totalPages, p + 1))}
-                disabled={page >= stats.totalPages || loading}
-                className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors",
-                  page >= stats.totalPages ? "text-muted/40 cursor-not-allowed" : "text-muted hover:bg-surface"
-                )}
-              >
-                Next <ChevronRight size={14} />
-              </button>
-            </div>
+                  {Array.from({ length: Math.min(7, stats.totalPages) }, (_, i) => {
+                    let pn: number;
+                    if (stats.totalPages <= 7) pn = i + 1;
+                    else if (page <= 4) pn = i + 1;
+                    else if (page >= stats.totalPages - 3) pn = stats.totalPages - 6 + i;
+                    else pn = page - 3 + i;
+                    return (
+                      <button
+                        key={pn}
+                        onClick={() => setPage(pn)}
+                        className={cn(
+                          "w-8 h-8 rounded-lg text-xs transition-colors",
+                          page === pn ? "bg-navy text-white font-bold" : "text-muted hover:bg-surface"
+                        )}
+                      >
+                        {pn}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => setPage((p) => Math.min(stats.totalPages, p + 1))}
+                    disabled={page >= stats.totalPages || loading}
+                    className={cn(
+                      "flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs transition-colors",
+                      page >= stats.totalPages ? "text-muted/40 cursor-not-allowed" : "text-muted hover:bg-surface"
+                    )}
+                  >
+                    Next <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* ── Sidebar ── */}
+          {data && (
+            <CampaignSidebar>
+              {/* Budget Pacing */}
+              <SidebarSection title="Budget Pacing">
+                <BudgetPacing totalSpend={aggregateStats.totalSpend} />
+              </SidebarSection>
+
+              {/* Platform Split */}
+              <SidebarSection title="Platform Split">
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-medium">Meta</span>
+                      <span className="text-muted">{fmtINR(platformSplit.meta.spend)} · {platformSplit.meta.pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full">
+                      <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${platformSplit.meta.pct}%` }} />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted">
+                      <span>ROAS {fmtROAS(platformSplit.meta.roas)}</span>
+                      <span>{platformSplit.meta.conversions} conv</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-medium">Google</span>
+                      <span className="text-muted">{fmtINR(platformSplit.google.spend)} · {platformSplit.google.pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full">
+                      <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${platformSplit.google.pct}%` }} />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted">
+                      <span>ROAS {fmtROAS(platformSplit.google.roas)}</span>
+                      <span>{platformSplit.google.conversions} conv</span>
+                    </div>
+                  </div>
+                  {platformSplit.meta.spend > 0 && platformSplit.google.spend > 0 && (
+                    <p className="text-xs text-brand-blue pt-2 border-t border-card-border">
+                      {platformSplit.google.roas > platformSplit.meta.roas
+                        ? `Google has ${((platformSplit.google.roas / platformSplit.meta.roas - 1) * 100).toFixed(0)}% better ROAS`
+                        : `Meta has ${((platformSplit.meta.roas / platformSplit.google.roas - 1) * 100).toFixed(0)}% better ROAS`}
+                    </p>
+                  )}
+                </div>
+              </SidebarSection>
+
+              {/* Top Brands */}
+              {topBrands.length > 0 && (
+                <SidebarSection title="Top Brands">
+                  <div className="space-y-2">
+                    {topBrands.map((b) => (
+                      <div key={b.name} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "w-2 h-2 rounded-full",
+                            b.roas >= 3 ? "bg-green-500" : b.roas >= 1 ? "bg-amber-500" : "bg-red-500"
+                          )} />
+                          <span className="font-medium">{b.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-muted">
+                          <span>{fmtINR(b.spend)}</span>
+                          <span className={cn(
+                            "font-medium",
+                            b.roas >= 3 ? "text-green-700" : b.roas >= 1 ? "text-amber-700" : "text-red-700"
+                          )}>
+                            {fmtROAS(b.roas)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {topBrands.some((b) => b.roas < 1) && (
+                      <p className="text-xs text-red-600 pt-2 border-t border-card-border">
+                        {topBrands.filter((b) => b.roas < 1).map((b) => b.name).join(", ")} below breakeven
+                      </p>
+                    )}
+                  </div>
+                </SidebarSection>
+              )}
+
+              {/* AI Quick Actions */}
+              <SidebarSection title="AI Quick Actions">
+                <div className="space-y-3">
+                  {/* Scale recommendation — highest ROAS active campaign */}
+                  {(() => {
+                    const best = [...filteredCampaigns]
+                      .filter((c) => c.status === "ACTIVE" && c.metrics?.roas >= 3 && c.metrics?.spend > 0)
+                      .sort((a, b) => (b.metrics?.roas || 0) - (a.metrics?.roas || 0))[0];
+                    if (!best) return null;
+                    return (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="w-2 h-2 rounded-full bg-green-500" />
+                          <span className="text-xs font-semibold text-green-800">Scale</span>
+                        </div>
+                        <p className="text-xs text-green-900 font-medium truncate">{best.name}</p>
+                        <p className="text-xs text-green-700 mt-0.5">ROAS {fmtROAS(best.metrics.roas)} · {fmtINR(best.metrics.spend)} spend</p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Pause recommendation — lowest ROAS with spend */}
+                  {(() => {
+                    const worst = [...filteredCampaigns]
+                      .filter((c) => c.status === "ACTIVE" && c.metrics?.roas < 1 && c.metrics?.spend > 0)
+                      .sort((a, b) => (a.metrics?.roas || 0) - (b.metrics?.roas || 0))[0];
+                    if (!worst) return null;
+                    return (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="w-2 h-2 rounded-full bg-red-500" />
+                          <span className="text-xs font-semibold text-red-800">Consider Pausing</span>
+                        </div>
+                        <p className="text-xs text-red-900 font-medium truncate">{worst.name}</p>
+                        <p className="text-xs text-red-700 mt-0.5">ROAS {fmtROAS(worst.metrics.roas)} · {fmtINR(worst.metrics.spend)} wasted</p>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Monitor recommendation */}
+                  {(() => {
+                    const monitor = [...filteredCampaigns]
+                      .filter((c) => c.status === "ACTIVE" && c.metrics?.roas >= 1 && c.metrics?.roas < 2 && c.metrics?.spend > 0)
+                      .sort((a, b) => (b.metrics?.spend || 0) - (a.metrics?.spend || 0))[0];
+                    if (!monitor) return null;
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                          <span className="text-xs font-semibold text-amber-800">Watch Closely</span>
+                        </div>
+                        <p className="text-xs text-amber-900 font-medium truncate">{monitor.name}</p>
+                        <p className="text-xs text-amber-700 mt-0.5">ROAS {fmtROAS(monitor.metrics.roas)} · High spend {fmtINR(monitor.metrics.spend)}</p>
+                      </div>
+                    );
+                  })()}
+
+                  {filteredCampaigns.filter((c) => c.status === "ACTIVE" && c.metrics?.spend > 0).length === 0 && (
+                    <div className="text-center py-4">
+                      <Sparkles size={16} className="text-muted mx-auto mb-2" />
+                      <p className="text-xs text-muted">No active campaigns with spend data</p>
+                    </div>
+                  )}
+                </div>
+              </SidebarSection>
+            </CampaignSidebar>
+          )}
+        </div>
 
         {/* Loading overlay */}
         {loading && data && (

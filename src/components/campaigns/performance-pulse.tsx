@@ -11,7 +11,7 @@ interface PerformancePulseProps {
 
 export function PerformancePulse({ stats }: PerformancePulseProps) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
       <StatCard
         label="Total Spend"
         value={fmtINR(stats.totalSpend)}
