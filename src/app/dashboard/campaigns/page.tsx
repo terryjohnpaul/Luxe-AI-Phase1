@@ -253,8 +253,9 @@ function CampaignsContent() {
       clearTimeout(timeout);
       if (!res.ok) throw new Error(`API returned ${res.status}`);
       setData(await res.json());
-    } catch {
-      // Fallback to mock data when API is unreachable
+    } catch (err) {
+      // API failed — fallback to mock data so the UI always renders
+      console.log("[Campaigns] API failed, using mock data:", err);
       setData(getMockCampaigns());
     } finally {
       setLoading(false);
