@@ -6,6 +6,14 @@ const META_API = "https://graph.facebook.com/v25.0";
 const CACHE_KEY = "campaigns:live:meta";
 const CACHE_TTL = 300; // 5 minutes
 
+// ── Timeout helper ──────────────────────────────────────────────
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 // ── Account resolver ────────────────────────────────────────────
 async function resolveAccount(account: string) {
   // Map short account IDs to Meta account IDs for DB lookup
@@ -15,41 +23,21 @@ async function resolveAccount(account: string) {
   };
   const targetAccountId = accountIdMap[account];
 
-  // Try to resolve from ConnectedAccount DB first
+  // Try to resolve from ConnectedAccount DB first (5s timeout to avoid hanging)
   try {
-    if (targetAccountId) {
-      const dbAccounts: any[] = await db.$queryRaw`
-        SELECT "accountId", "accountName", "accessToken"
-        FROM "ConnectedAccount"
-        WHERE status = 'active' AND platform = 'META' AND "accountId" = ${targetAccountId}
-        LIMIT 1
-      `;
-      if (dbAccounts && dbAccounts.length > 0) {
-        const acc = dbAccounts[0];
-        return {
-          token: acc.accessToken,
-          accountId: acc.accountId,
-          accountName: acc.accountName,
-          tokenEnvName: "DB:ConnectedAccount",
-        };
-      }
-    } else {
-      // For dynamically added accounts, try matching by account param as accountId
-      const dbAccounts: any[] = await db.$queryRaw`
-        SELECT "accountId", "accountName", "accessToken"
-        FROM "ConnectedAccount"
-        WHERE status = 'active' AND platform = 'META' AND "accountId" = ${account}
-        LIMIT 1
-      `;
-      if (dbAccounts && dbAccounts.length > 0) {
-        const acc = dbAccounts[0];
-        return {
-          token: acc.accessToken,
-          accountId: acc.accountId,
-          accountName: acc.accountName,
-          tokenEnvName: "DB:ConnectedAccount",
-        };
-      }
+    const query = targetAccountId
+      ? db.$queryRaw`SELECT "accountId", "accountName", "accessToken" FROM "ConnectedAccount" WHERE status = 'active' AND platform = 'META' AND "accountId" = ${targetAccountId} LIMIT 1`
+      : db.$queryRaw`SELECT "accountId", "accountName", "accessToken" FROM "ConnectedAccount" WHERE status = 'active' AND platform = 'META' AND "accountId" = ${account} LIMIT 1`;
+
+    const dbAccounts: any[] = await withTimeout(query, 5000, []);
+    if (dbAccounts && dbAccounts.length > 0) {
+      const acc = dbAccounts[0];
+      return {
+        token: acc.accessToken,
+        accountId: acc.accountId,
+        accountName: acc.accountName,
+        tokenEnvName: "DB:ConnectedAccount",
+      };
     }
   } catch (err: any) {
     console.error('[Campaigns] DB account resolve failed, using env fallback:', err.message);
@@ -241,9 +229,12 @@ export async function GET(request: Request) {
   try {
     let allCampaigns: MergedCampaign[];
 
-    // Try cache first (cache key includes account and status filter)
+    // Try cache first (with 3s timeout to avoid hanging on broken Redis)
     const cacheKey = `${CACHE_KEY}:${account}:${statusFilter}`;
-    const cached = await redis.get(cacheKey).catch(() => null);
+    const cached = await Promise.race([
+      redis.get(cacheKey).catch(() => null),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+    ]);
 
     if (cached) {
       allCampaigns = JSON.parse(cached);
@@ -253,8 +244,11 @@ export async function GET(request: Request) {
       // Fetch live from Meta API
       allCampaigns = await fetchLiveMetaCampaigns(token, accountId, statusFilter);
 
-      // Cache for 5 minutes
-      await redis.set(cacheKey, JSON.stringify(allCampaigns), "EX", CACHE_TTL).catch(() => {});
+      // Cache for 5 minutes (fire-and-forget with timeout)
+      Promise.race([
+        redis.set(cacheKey, JSON.stringify(allCampaigns), "EX", CACHE_TTL).catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, 2000)),
+      ]);
     }
 
     // Client-side filtering: search
