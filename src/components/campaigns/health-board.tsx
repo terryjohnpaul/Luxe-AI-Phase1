@@ -72,7 +72,7 @@ function HealthLaneSection({
   if (group.campaigns.length === 0) return null;
 
   return (
-    <div className={cn("border-l-4 rounded-lg", config.borderColor)}>
+    <div className="rounded-lg">
       <button
         onClick={() => setCollapsed(!collapsed)}
         className={cn(
